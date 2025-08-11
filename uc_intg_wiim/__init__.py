@@ -1,5 +1,5 @@
 """
-WiiM Integration for Unfolded Circle Remote Two.
+WiiM Integration for Unfolded Circle Remote Two/3.
 
 A professional integration for controlling WiiM audio streaming devices 
 (Mini, Pro, Pro Plus, Ultra, Amp) with complete media player and remote control functionality.

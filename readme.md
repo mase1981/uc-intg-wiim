@@ -1,4 +1,4 @@
-# WiiM Integration for Unfolded Circle Remote Two
+# WiiM Integration for Unfolded Circle Remote Two/3
 
 [![GitHub Release](https://img.shields.io/github/release/mase1981/uc-intg-wiim.svg)](https://github.com/mase1981/uc-intg-wiim/releases)
 [![GitHub License](https://img.shields.io/github/license/mase1981/uc-intg-wiim.svg)](https://github.com/mase1981/uc-intg-wiim/blob/main/LICENSE)

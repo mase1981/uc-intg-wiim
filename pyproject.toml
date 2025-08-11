@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "uc-intg-wiim"
 version = "1.0.0"
-description = "WiiM Integration for Unfolded Circle Remote Two"
+description = "WiiM Integration for Unfolded Circle Remote Two/3"
 readme = "README.md"
 authors = [
     {name = "Meir Miyara", email = "meir.miyara@gmail.com"}

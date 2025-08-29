@@ -37,6 +37,7 @@ class WiiMMediaPlayer(MediaPlayer):
         self._client = None
         self._integration_api = None
         self._initialized = False
+        self._last_mode = None  # Track the last mode to detect source switches
 
     def set_client(self, client):
         """Set the WiiM client."""
@@ -105,7 +106,16 @@ class WiiMMediaPlayer(MediaPlayer):
     async def _update_playback_state(self, status: dict):
         """Update playback state and media information."""
         player_status = status.get('status', 'stop').lower()
-        _LOG.debug("Player status: %s", player_status)
+        current_mode = int(status.get('mode', 0))
+        
+        # Check if source/mode has changed
+        if self._last_mode is not None and self._last_mode != current_mode:
+            _LOG.debug("Source changed from mode %s to %s, clearing old metadata", self._last_mode, current_mode)
+            self._clear_media_info()
+        
+        self._last_mode = current_mode
+        
+        _LOG.debug("Player status: %s, Mode: %s", player_status, current_mode)
         
         if player_status in ['play', 'loading']:
             await self._update_media_info(status)
@@ -144,20 +154,38 @@ class WiiMMediaPlayer(MediaPlayer):
         ]
         for attr in media_attrs:
             self.attributes.pop(attr, None)
+        _LOG.debug("Cleared media information attributes")
 
     async def _update_media_info(self, player_status: dict):
         """Update media information from metadata."""
         try:
             metadata = await self._client.get_track_metadata()
             if not metadata:
+                # If no metadata available, clear existing media info to prevent stale data
+                self._clear_media_info()
                 return
                 
-            self._set_media_metadata(metadata)
-            self._set_position_duration(player_status)
-            self._set_media_type(player_status)
+            # Only update if we have valid metadata
+            if self._has_valid_metadata(metadata):
+                self._set_media_metadata(metadata)
+                self._set_position_duration(player_status)
+                self._set_media_type(player_status)
+            else:
+                # Clear media info if metadata is not valid/useful
+                self._clear_media_info()
                 
         except Exception as e:
             _LOG.error("Error updating media info: %s", e)
+            self._clear_media_info()
+
+    def _has_valid_metadata(self, metadata: dict) -> bool:
+        """Check if metadata contains useful information."""
+        title = self._clean_metadata(metadata.get('title'))
+        artist = self._clean_metadata(metadata.get('artist'))
+        album = self._clean_metadata(metadata.get('album'))
+        
+        # Consider metadata valid if we have at least a title or artist
+        return bool(title or artist or album)
 
     def _set_media_metadata(self, metadata: dict):
         """Set media metadata attributes."""

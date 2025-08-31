@@ -38,6 +38,7 @@ class WiiMMediaPlayer(MediaPlayer):
         self._integration_api = None
         self._initialized = False
         self._last_mode = None  # Track the last mode to detect source switches
+        self._metadata_clear_pending = False  # Flag to force clear on next update
 
     def set_client(self, client):
         """Set the WiiM client."""
@@ -52,7 +53,7 @@ class WiiMMediaPlayer(MediaPlayer):
             Features.REPEAT, Features.SHUFFLE, Features.MEDIA_DURATION,
             Features.MEDIA_POSITION, Features.MEDIA_TITLE, Features.MEDIA_ARTIST,
             Features.MEDIA_ALBUM, Features.MEDIA_IMAGE_URL, Features.MEDIA_TYPE,
-            Features.SELECT_SOURCE,
+            Features.SELECT_SOURCE,  # Added for activity source selection
         ]
 
     def _build_initial_attributes(self) -> dict:
@@ -60,7 +61,9 @@ class WiiMMediaPlayer(MediaPlayer):
         return {
             Attributes.STATE: States.STANDBY,
             Attributes.VOLUME: 50,
-            Attributes.MUTED: False
+            Attributes.MUTED: False,
+            Attributes.SOURCE_LIST: [],  # Will be populated during initialization
+            Attributes.SOURCE: None,     # Will be set based on current mode
         }
 
     async def initialize_and_set_state(self):
@@ -68,12 +71,15 @@ class WiiMMediaPlayer(MediaPlayer):
         if not self._client:
             return
         
+        # Set up source list for activity integration
         if self._client.sources:
-            self.attributes[Attributes.SOURCE_LIST] = list(self._client.sources.keys())
+            source_list = list(self._client.sources.keys())
+            self.attributes[Attributes.SOURCE_LIST] = source_list
+            _LOG.info("Initialized source list for activities: %s", source_list)
         
         await self.update_attributes()
         self._initialized = True
-        _LOG.info("Media Player initialized")
+        _LOG.info("Media Player initialized with source selection capability")
 
     async def update_attributes(self):
         """Update entity attributes from device state."""
@@ -108,10 +114,14 @@ class WiiMMediaPlayer(MediaPlayer):
         player_status = status.get('status', 'stop').lower()
         current_mode = int(status.get('mode', 0))
         
-        # Check if source/mode has changed
-        if self._last_mode is not None and self._last_mode != current_mode:
-            _LOG.debug("Source changed from mode %s to %s, clearing old metadata", self._last_mode, current_mode)
+        # Check if source/mode has changed or if we need to force clear
+        if (self._last_mode is not None and self._last_mode != current_mode) or self._metadata_clear_pending:
+            _LOG.debug("Source changed from mode %s to %s or force clear requested, clearing old metadata", 
+                      self._last_mode, current_mode)
             self._clear_media_info()
+            self._metadata_clear_pending = False
+            # Wait a moment for device to stabilize before getting new metadata
+            await asyncio.sleep(0.5)
         
         self._last_mode = current_mode
         
@@ -134,6 +144,8 @@ class WiiMMediaPlayer(MediaPlayer):
         """Update current source based on mode."""
         mode = int(status.get('mode', 0))
         source_map = {
+            31: 'wifi',        # Spotify Connect
+            32: 'wifi',        # TIDAL Connect  
             40: 'line-in',     # AUX-In
             41: 'bluetooth',   # Bluetooth
             43: 'optical',     # Optical
@@ -279,7 +291,17 @@ class WiiMMediaPlayer(MediaPlayer):
             elif cmd_id == Commands.VOLUME and params and 'volume' in params:
                 await self._client.set_volume(int(params['volume']))
             elif cmd_id == Commands.SELECT_SOURCE and params and 'source' in params:
-                await self._client.send_command(f"setPlayerCmd:switchmode:{params['source']}")
+                source = params['source']
+                _LOG.info("Switching to source: %s", source)
+                
+                # Set flag to clear metadata on next update
+                self._metadata_clear_pending = True
+                
+                # Execute source switch command
+                await self._client.send_command(f"setPlayerCmd:switchmode:{source}")
+                
+                # Force immediate state update after source change
+                asyncio.create_task(self._immediate_update_after_source_change())
             else:
                 _LOG.warning("Unhandled command: %s", cmd_id)
                 return StatusCodes.NOT_IMPLEMENTED
@@ -290,6 +312,11 @@ class WiiMMediaPlayer(MediaPlayer):
         except Exception as e:
             _LOG.error("Error handling command %s: %s", cmd_id, e)
             return StatusCodes.SERVER_ERROR
+
+    async def _immediate_update_after_source_change(self):
+        """Immediate update after source change to clear stale metadata faster."""
+        await asyncio.sleep(0.5)  # Brief wait for device to process command
+        await self.update_attributes()
 
     async def _deferred_update(self):
         """Update attributes after a short delay."""

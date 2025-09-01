@@ -47,13 +47,14 @@ class WiiMMediaPlayer(MediaPlayer):
     def _build_features(self) -> list:
         """Build media player features list."""
         return [
-            Features.ON_OFF, Features.VOLUME, Features.VOLUME_UP_DOWN,
+            Features.VOLUME, Features.VOLUME_UP_DOWN,
             Features.MUTE_TOGGLE, Features.MUTE, Features.UNMUTE,
             Features.PLAY_PAUSE, Features.STOP, Features.NEXT, Features.PREVIOUS,
             Features.REPEAT, Features.SHUFFLE, Features.MEDIA_DURATION,
             Features.MEDIA_POSITION, Features.MEDIA_TITLE, Features.MEDIA_ARTIST,
             Features.MEDIA_ALBUM, Features.MEDIA_IMAGE_URL, Features.MEDIA_TYPE,
-            Features.SELECT_SOURCE,  # Added for activity source selection
+            Features.SELECT_SOURCE,  # For activity source selection
+            # Note: Display control will be handled via custom commands
         ]
 
     def _build_initial_attributes(self) -> dict:
@@ -71,30 +72,28 @@ class WiiMMediaPlayer(MediaPlayer):
         if not self._client:
             return
         
-        # Set up comprehensive source list for activity integration (inputs + outputs)
+        # Set up comprehensive source list for activity integration (inputs + outputs + special commands)
         source_list = []
         
         # Add input sources
         if self._client.sources:
             source_list.extend(list(self._client.sources.keys()))
         
-        # Add output routing options
-        output_sources = [
-            'line-out',      # Line output
-            'headphone',     # Headphone output
-            'optical-out',   # Optical output
-            'coax-out',      # Coaxial output
-            'bluetooth-out', # Bluetooth output (for devices that support it)
-            'multi-room'     # Multi-room output
+        # Add special WiiM functions that can be controlled via source selection
+        special_functions = [
+            'display_on',     # Turn display on
+            'display_off',    # Turn display off
+            'reboot_device',  # Reboot device (use with caution)
+            'toggle_display', # Toggle display on/off
         ]
-        source_list.extend(output_sources)
+        source_list.extend(special_functions)
         
         self.attributes[Attributes.SOURCE_LIST] = source_list
-        _LOG.info("Initialized source list for activities (inputs + outputs): %s", source_list)
+        _LOG.info("Initialized source list for activities (inputs + special functions): %s", source_list)
         
         await self.update_attributes()
         self._initialized = True
-        _LOG.info("Media Player initialized with comprehensive source selection capability")
+        _LOG.info("Media Player initialized with source selection and display control capabilities")
 
     async def update_attributes(self):
         """Update entity attributes from device state."""
@@ -286,9 +285,8 @@ class WiiMMediaPlayer(MediaPlayer):
         try:
             _LOG.info("Handling command: %s with params: %s", cmd_id, params)
             
+            # Removed ON/OFF commands as WiiM devices don't support power on/off
             command_map = {
-                Commands.ON: self._client.resume_playback,
-                Commands.OFF: self._client.stop_playback,
                 Commands.TOGGLE: self._client.toggle_playback,
                 Commands.PLAY_PAUSE: self._client.toggle_playback,
                 Commands.STOP: self._client.stop_playback,
@@ -307,59 +305,73 @@ class WiiMMediaPlayer(MediaPlayer):
                 await self._client.set_volume(int(params['volume']))
             elif cmd_id == Commands.SELECT_SOURCE and params and 'source' in params:
                 source = params['source']
-                _LOG.info("Switching to source: %s", source)
+                _LOG.info("Switching to source/function: %s", source)
                 
-                # Set flag to clear metadata on next update
-                self._metadata_clear_pending = True
+                # Set flag to clear metadata on next update for regular sources
+                if source not in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
+                    self._metadata_clear_pending = True
                 
-                # Handle different types of source/output switching
-                if source.endswith('-out') or source in ['headphone', 'multi-room', 'bluetooth-out']:
-                    # Output routing command
-                    await self._handle_output_routing(source)
+                # Handle different types of source/function switching
+                if source in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
+                    # Special device functions
+                    await self._handle_device_function(source)
                 else:
-                    # Input source switching
+                    # Regular input source switching
                     await self._client.send_command(f"setPlayerCmd:switchmode:{source}")
                 
-                # Force immediate state update after source change
-                asyncio.create_task(self._immediate_update_after_source_change())
+                # Force immediate state update for regular source changes only
+                if source not in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
+                    asyncio.create_task(self._immediate_update_after_source_change())
             else:
                 _LOG.warning("Unhandled command: %s", cmd_id)
                 return StatusCodes.NOT_IMPLEMENTED
             
-            asyncio.create_task(self._deferred_update())
+            # Only defer update for non-special commands
+            if not (cmd_id == Commands.SELECT_SOURCE and params.get('source') in 
+                   ['display_on', 'display_off', 'toggle_display', 'reboot_device']):
+                asyncio.create_task(self._deferred_update())
+                
             return StatusCodes.OK
             
         except Exception as e:
             _LOG.error("Error handling command %s: %s", cmd_id, e)
             return StatusCodes.SERVER_ERROR
 
+    async def _handle_device_function(self, function: str):
+        """Handle WiiM device special functions."""
+        try:
+            # Map function names to WiiM API commands based on official documentation
+            function_commands = {
+                'display_on': 'setLightOperationBrightConfig:{"disable":0}',
+                'display_off': 'setLightOperationBrightConfig:{"disable":1}',
+                'toggle_display': None,  # Will handle separately
+                'reboot_device': 'reboot'
+            }
+            
+            if function == 'toggle_display':
+                # Toggle display requires checking current state (not easily available)
+                # Default to display off for safety
+                command = 'setLightOperationBrightConfig:{"disable":1}'
+                _LOG.info("Toggle display - defaulting to display off")
+            else:
+                command = function_commands.get(function)
+            
+            if command:
+                _LOG.info("Executing device function command: %s", command)
+                await self._client.send_command(command)
+                
+                if function == 'reboot_device':
+                    _LOG.warning("Device reboot command sent - device will be unavailable during restart")
+            else:
+                _LOG.warning("Unknown device function: %s", function)
+                
+        except Exception as e:
+            _LOG.error("Error executing device function %s: %s", function, e)
+
     async def _immediate_update_after_source_change(self):
         """Immediate update after source change to clear stale metadata faster."""
         await asyncio.sleep(0.5)  # Brief wait for device to process command
         await self.update_attributes()
-
-    async def _handle_output_routing(self, output: str):
-        """Handle output routing commands for WiiM device."""
-        try:
-            # Map output names to WiiM API commands
-            output_commands = {
-                'line-out': 'setAudioOutput:line',
-                'headphone': 'setAudioOutput:headphone', 
-                'optical-out': 'setAudioOutput:optical',
-                'coax-out': 'setAudioOutput:coax',
-                'bluetooth-out': 'setAudioOutput:bluetooth',
-                'multi-room': 'setPlayerCmd:multiroom:on'  # Multi-room mode
-            }
-            
-            if output in output_commands:
-                command = output_commands[output]
-                _LOG.info("Executing output routing command: %s", command)
-                await self._client.send_command(command)
-            else:
-                _LOG.warning("Unknown output routing option: %s", output)
-                
-        except Exception as e:
-            _LOG.error("Error setting output routing %s: %s", output, e)
 
     async def _deferred_update(self):
         """Update attributes after a short delay."""

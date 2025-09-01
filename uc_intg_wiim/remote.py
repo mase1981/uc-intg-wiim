@@ -18,7 +18,8 @@ class WiiMRemote(Remote):
 
     def __init__(self, device_id: str, device_name: str):
         """Initialize remote entity."""
-        features = [Features.ON_OFF, Features.SEND_CMD]
+        # Removed ON_OFF feature - WiiM devices don't have power on/off
+        features = [Features.SEND_CMD]
         attributes = {Attributes.STATE: States.ON}
         
         simple_commands = self._build_base_commands()
@@ -46,7 +47,8 @@ class WiiMRemote(Remote):
         """Build base command list."""
         return [
             'play', 'pause', 'stop', 'next', 'previous',
-            'volume_up', 'volume_down', 'mute_toggle', 'on', 'off',
+            'volume_up', 'volume_down', 'mute_toggle',
+            'display_on', 'display_off', 'toggle_display', 'reboot_device',
             'wifi', 'bluetooth', 'line-in', 'optical', 'HDMI', 'phono', 'udisk'
         ]
 
@@ -77,9 +79,9 @@ class WiiMRemote(Remote):
                 {'type': 'text', 'location': {'x': 3, 'y': 1}, 'text': 'STOP', 
                  'command': {'cmd_id': 'send_cmd', 'params': {'command': 'stop'}}},
                 
-                # Standby + Main sources (ON button removed)
-                {'type': 'text', 'location': {'x': 0, 'y': 2}, 'text': 'STANDBY', 
-                 'command': {'cmd_id': 'off', 'params': {}}},
+                # Display controls + Main sources (replaced power buttons)
+                {'type': 'text', 'location': {'x': 0, 'y': 2}, 'text': 'DISP OFF', 
+                 'command': {'cmd_id': 'send_cmd', 'params': {'command': 'display_off'}}},
                 {'type': 'text', 'location': {'x': 1, 'y': 2}, 'text': 'WiFi', 
                  'command': {'cmd_id': 'send_cmd', 'params': {'command': 'wifi'}}},
                 {'type': 'text', 'location': {'x': 2, 'y': 2}, 'text': 'BT', 
@@ -87,15 +89,15 @@ class WiiMRemote(Remote):
                 {'type': 'text', 'location': {'x': 3, 'y': 2}, 'text': 'Line', 
                  'command': {'cmd_id': 'send_cmd', 'params': {'command': 'line-in'}}},
                 
-                # Additional sources (adjusted layout after removing ON button)
-                {'type': 'text', 'location': {'x': 0, 'y': 3}, 'text': 'Optical', 
-                 'command': {'cmd_id': 'send_cmd', 'params': {'command': 'optical'}}},
+                # Additional sources + display on
+                {'type': 'text', 'location': {'x': 0, 'y': 3}, 'text': 'DISP ON', 
+                 'command': {'cmd_id': 'send_cmd', 'params': {'command': 'display_on'}}},
                 {'type': 'text', 'location': {'x': 1, 'y': 3}, 'text': 'HDMI', 
                  'command': {'cmd_id': 'send_cmd', 'params': {'command': 'HDMI'}}},
                 {'type': 'text', 'location': {'x': 2, 'y': 3}, 'text': 'USB', 
                  'command': {'cmd_id': 'send_cmd', 'params': {'command': 'udisk'}}},
-                {'type': 'text', 'location': {'x': 3, 'y': 3}, 'text': 'Phono', 
-                 'command': {'cmd_id': 'send_cmd', 'params': {'command': 'phono'}}},
+                {'type': 'text', 'location': {'x': 3, 'y': 3}, 'text': 'Optical', 
+                 'command': {'cmd_id': 'send_cmd', 'params': {'command': 'optical'}}},
             ]
         }
 
@@ -150,8 +152,39 @@ class WiiMRemote(Remote):
         if self._client.eq_presets:
             if eq_page := self._create_eq_page():
                 pages.append(eq_page)
+                
+        # Add device control page
+        if device_page := self._create_device_control_page():
+            pages.append(device_page)
         
         return pages
+
+    def _create_device_control_page(self) -> Dict[str, Any]:
+        """Create device control page for display and system functions."""
+        return {
+            'page_id': 'device',
+            'name': 'Device Control',
+            'grid': {'width': 4, 'height': 6},
+            'items': [
+                # Display controls
+                {'type': 'text', 'location': {'x': 0, 'y': 0}, 'text': 'Display On', 
+                 'command': {'cmd_id': 'send_cmd', 'params': {'command': 'display_on'}}},
+                {'type': 'text', 'location': {'x': 1, 'y': 0}, 'text': 'Display Off', 
+                 'command': {'cmd_id': 'send_cmd', 'params': {'command': 'display_off'}}},
+                {'type': 'text', 'location': {'x': 2, 'y': 0}, 'text': 'Toggle Disp', 
+                 'command': {'cmd_id': 'send_cmd', 'params': {'command': 'toggle_display'}}},
+                
+                # System control (use with caution)
+                {'type': 'text', 'location': {'x': 0, 'y': 1}, 'text': 'REBOOT', 
+                 'command': {'cmd_id': 'send_cmd', 'params': {'command': 'reboot_device'}}},
+                
+                # Add some commonly used quick access buttons
+                {'type': 'text', 'location': {'x': 2, 'y': 1}, 'text': 'WiFi Mode', 
+                 'command': {'cmd_id': 'send_cmd', 'params': {'command': 'wifi'}}},
+                {'type': 'text', 'location': {'x': 3, 'y': 1}, 'text': 'BT Mode', 
+                 'command': {'cmd_id': 'send_cmd', 'params': {'command': 'bluetooth'}}},
+            ]
+        }
 
     def _create_services_page(self) -> Dict[str, Any]:
         """Create services page based on preset sources."""
@@ -294,11 +327,8 @@ class WiiMRemote(Remote):
             return StatusCodes.SERVER_ERROR
             
         try:
-            if cmd_id == "off":
-                _LOG.info("STANDBY command - stopping playback")
-                await self._client.stop_playback()
-                
-            elif cmd_id == "send_cmd" and params and 'command' in params:
+            # Removed 'off' command - WiiM devices don't have power off
+            if cmd_id == "send_cmd" and params and 'command' in params:
                 command = params['command']
                 await self._execute_command(command)
                 
@@ -329,14 +359,24 @@ class WiiMRemote(Remote):
             await basic_commands[command]()
             return
         
+        # Display and device control commands
+        if command == 'display_on':
+            await self._client.send_command('setLightOperationBrightConfig:{"disable":0}')
+        elif command == 'display_off':
+            await self._client.send_command('setLightOperationBrightConfig:{"disable":1}')
+        elif command == 'toggle_display':
+            # Default to display off for safety since we can't easily check current state
+            await self._client.send_command('setLightOperationBrightConfig:{"disable":1}')
+        elif command == 'reboot_device':
+            _LOG.warning("Reboot command executed - device will be unavailable during restart")
+            await self._client.send_command('reboot')
+        
         # Source switching
-        sources = ['wifi', 'bluetooth', 'line-in', 'optical', 'HDMI', 'phono', 'udisk']
-        if command in sources:
+        elif command in ['wifi', 'bluetooth', 'line-in', 'optical', 'HDMI', 'phono', 'udisk']:
             await self._client.send_command(f"setPlayerCmd:switchmode:{command}")
-            return
         
         # EQ commands
-        if command == 'eq_on':
+        elif command == 'eq_on':
             await self._client.send_command("EQOn")
         elif command == 'eq_off':
             await self._client.send_command("EQOff")

@@ -71,15 +71,30 @@ class WiiMMediaPlayer(MediaPlayer):
         if not self._client:
             return
         
-        # Set up source list for activity integration
+        # Set up comprehensive source list for activity integration (inputs + outputs)
+        source_list = []
+        
+        # Add input sources
         if self._client.sources:
-            source_list = list(self._client.sources.keys())
-            self.attributes[Attributes.SOURCE_LIST] = source_list
-            _LOG.info("Initialized source list for activities: %s", source_list)
+            source_list.extend(list(self._client.sources.keys()))
+        
+        # Add output routing options
+        output_sources = [
+            'line-out',      # Line output
+            'headphone',     # Headphone output
+            'optical-out',   # Optical output
+            'coax-out',      # Coaxial output
+            'bluetooth-out', # Bluetooth output (for devices that support it)
+            'multi-room'     # Multi-room output
+        ]
+        source_list.extend(output_sources)
+        
+        self.attributes[Attributes.SOURCE_LIST] = source_list
+        _LOG.info("Initialized source list for activities (inputs + outputs): %s", source_list)
         
         await self.update_attributes()
         self._initialized = True
-        _LOG.info("Media Player initialized with source selection capability")
+        _LOG.info("Media Player initialized with comprehensive source selection capability")
 
     async def update_attributes(self):
         """Update entity attributes from device state."""
@@ -297,8 +312,13 @@ class WiiMMediaPlayer(MediaPlayer):
                 # Set flag to clear metadata on next update
                 self._metadata_clear_pending = True
                 
-                # Execute source switch command
-                await self._client.send_command(f"setPlayerCmd:switchmode:{source}")
+                # Handle different types of source/output switching
+                if source.endswith('-out') or source in ['headphone', 'multi-room', 'bluetooth-out']:
+                    # Output routing command
+                    await self._handle_output_routing(source)
+                else:
+                    # Input source switching
+                    await self._client.send_command(f"setPlayerCmd:switchmode:{source}")
                 
                 # Force immediate state update after source change
                 asyncio.create_task(self._immediate_update_after_source_change())
@@ -317,6 +337,29 @@ class WiiMMediaPlayer(MediaPlayer):
         """Immediate update after source change to clear stale metadata faster."""
         await asyncio.sleep(0.5)  # Brief wait for device to process command
         await self.update_attributes()
+
+    async def _handle_output_routing(self, output: str):
+        """Handle output routing commands for WiiM device."""
+        try:
+            # Map output names to WiiM API commands
+            output_commands = {
+                'line-out': 'setAudioOutput:line',
+                'headphone': 'setAudioOutput:headphone', 
+                'optical-out': 'setAudioOutput:optical',
+                'coax-out': 'setAudioOutput:coax',
+                'bluetooth-out': 'setAudioOutput:bluetooth',
+                'multi-room': 'setPlayerCmd:multiroom:on'  # Multi-room mode
+            }
+            
+            if output in output_commands:
+                command = output_commands[output]
+                _LOG.info("Executing output routing command: %s", command)
+                await self._client.send_command(command)
+            else:
+                _LOG.warning("Unknown output routing option: %s", output)
+                
+        except Exception as e:
+            _LOG.error("Error setting output routing %s: %s", output, e)
 
     async def _deferred_update(self):
         """Update attributes after a short delay."""

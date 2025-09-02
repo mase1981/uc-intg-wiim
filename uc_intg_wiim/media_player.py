@@ -113,7 +113,7 @@ class WiiMMediaPlayer(MediaPlayer):
                 
         except Exception as e:
             _LOG.error("Error updating media player state: %s", e)
-            self._clear_media_info()
+            self._clear_all_media_info()
             self._handle_state_update(States.UNAVAILABLE)
 
     def _update_basic_attributes(self, status: dict):
@@ -132,7 +132,7 @@ class WiiMMediaPlayer(MediaPlayer):
         if (self._last_mode is not None and self._last_mode != current_mode) or self._metadata_clear_pending:
             _LOG.debug("Source changed from mode %s to %s or force clear requested, clearing old metadata", 
                       self._last_mode, current_mode)
-            self._clear_media_info()
+            self._clear_all_media_info()
             self._metadata_clear_pending = False
             # Wait a moment for device to stabilize before getting new metadata
             await asyncio.sleep(0.5)
@@ -148,10 +148,10 @@ class WiiMMediaPlayer(MediaPlayer):
             await self._update_media_info(status)
             self._handle_state_update(States.PAUSED)
         elif player_status == 'stop':
-            self._clear_media_info()
+            self._clear_all_media_info()
             self._handle_state_update(States.STANDBY)
         else:
-            self._clear_media_info()
+            self._clear_all_media_info()
             self._handle_state_update(States.STANDBY)
 
     def _update_source_info(self, status: dict):
@@ -171,8 +171,8 @@ class WiiMMediaPlayer(MediaPlayer):
         if mode in source_map:
             self.attributes[Attributes.SOURCE] = source_map[mode]
 
-    def _clear_media_info(self):
-        """Clear media information attributes."""
+    def _clear_all_media_info(self):
+        """Clear ALL media information attributes."""
         media_attrs = [
             Attributes.MEDIA_TITLE, Attributes.MEDIA_ARTIST, Attributes.MEDIA_ALBUM,
             Attributes.MEDIA_IMAGE_URL, Attributes.MEDIA_DURATION, 
@@ -180,52 +180,46 @@ class WiiMMediaPlayer(MediaPlayer):
         ]
         for attr in media_attrs:
             self.attributes.pop(attr, None)
-        _LOG.debug("Cleared media information attributes")
+        _LOG.debug("Cleared ALL media information attributes")
 
     async def _update_media_info(self, player_status: dict):
         """Update media information from metadata."""
         try:
             metadata = await self._client.get_track_metadata()
+            
+            # ALWAYS clear all media info first to prevent stale data
+            self._clear_all_media_info()
+            
             if not metadata:
-                # If no metadata available, clear existing media info to prevent stale data
-                self._clear_media_info()
+                _LOG.debug("No metadata available from device")
                 return
                 
-            # Only update if we have valid metadata
-            if self._has_valid_metadata(metadata):
-                self._set_media_metadata(metadata)
-                self._set_position_duration(player_status)
-                self._set_media_type(player_status)
-            else:
-                # Clear media info if metadata is not valid/useful
-                self._clear_media_info()
+            # Set only the valid metadata fields we receive
+            self._set_media_metadata(metadata)
+            self._set_position_duration(player_status)
+            self._set_media_type(player_status)
                 
         except Exception as e:
             _LOG.error("Error updating media info: %s", e)
-            self._clear_media_info()
-
-    def _has_valid_metadata(self, metadata: dict) -> bool:
-        """Check if metadata contains useful information."""
-        title = self._clean_metadata(metadata.get('title'))
-        artist = self._clean_metadata(metadata.get('artist'))
-        album = self._clean_metadata(metadata.get('album'))
-        
-        # Consider metadata valid if we have at least a title or artist
-        return bool(title or artist or album)
+            self._clear_all_media_info()
 
     def _set_media_metadata(self, metadata: dict):
-        """Set media metadata attributes."""
+        """Set media metadata attributes - only for valid values."""
         if title := self._clean_metadata(metadata.get('title')):
             self.attributes[Attributes.MEDIA_TITLE] = title
+            _LOG.debug("Set media title: %s", title)
             
         if artist := self._clean_metadata(metadata.get('artist')):
             self.attributes[Attributes.MEDIA_ARTIST] = artist
+            _LOG.debug("Set media artist: %s", artist)
             
         if album := self._clean_metadata(metadata.get('album')):
             self.attributes[Attributes.MEDIA_ALBUM] = album
+            _LOG.debug("Set media album: %s", album)
             
         if image_url := self._clean_metadata(metadata.get('albumArtURI')):
             self.attributes[Attributes.MEDIA_IMAGE_URL] = image_url
+            _LOG.debug("Set media image URL: %s", image_url)
 
     def _set_position_duration(self, player_status: dict):
         """Set position and duration attributes."""
@@ -233,10 +227,12 @@ class WiiMMediaPlayer(MediaPlayer):
             duration = int(player_status['totlen']) // 1000
             if duration > 0:
                 self.attributes[Attributes.MEDIA_DURATION] = duration
+                _LOG.debug("Set media duration: %s", duration)
                 
         if 'curpos' in player_status:
             position = int(player_status['curpos']) // 1000
             self.attributes[Attributes.MEDIA_POSITION] = position
+            _LOG.debug("Set media position: %s", position)
 
     def _set_media_type(self, player_status: dict):
         """Set media type based on mode."""
@@ -245,7 +241,7 @@ class WiiMMediaPlayer(MediaPlayer):
             self.attributes[Attributes.MEDIA_TYPE] = MediaType.MUSIC
 
     def _clean_metadata(self, value: Optional[str]) -> Optional[str]:
-        """Clean metadata values."""
+        """Clean metadata values - filter out WiiM's placeholder values."""
         if not value or value.lower() in ['unknow', 'un_known', 'unknown', '']:
             return None
         return value.strip()

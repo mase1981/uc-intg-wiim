@@ -37,8 +37,10 @@ class WiiMMediaPlayer(MediaPlayer):
         self._client = None
         self._integration_api = None
         self._initialized = False
-        self._last_mode = None  # Track the last mode to detect source switches
-        self._metadata_clear_pending = False  # Flag to force clear on next update
+        self._last_mode = None
+        self._last_status = None  # Track status changes too
+        self._metadata_clear_pending = False
+        self._last_meaningful_metadata = {}  # Track last meaningful metadata
 
     def set_client(self, client):
         """Set the WiiM client."""
@@ -53,8 +55,7 @@ class WiiMMediaPlayer(MediaPlayer):
             Features.REPEAT, Features.SHUFFLE, Features.MEDIA_DURATION,
             Features.MEDIA_POSITION, Features.MEDIA_TITLE, Features.MEDIA_ARTIST,
             Features.MEDIA_ALBUM, Features.MEDIA_IMAGE_URL, Features.MEDIA_TYPE,
-            Features.SELECT_SOURCE,  # For activity source selection
-            # Note: Display control will be handled via custom commands
+            Features.SELECT_SOURCE,
         ]
 
     def _build_initial_attributes(self) -> dict:
@@ -63,8 +64,8 @@ class WiiMMediaPlayer(MediaPlayer):
             Attributes.STATE: States.STANDBY,
             Attributes.VOLUME: 50,
             Attributes.MUTED: False,
-            Attributes.SOURCE_LIST: [],  # Will be populated during initialization
-            Attributes.SOURCE: None,     # Will be set based on current mode
+            Attributes.SOURCE_LIST: [],
+            Attributes.SOURCE: None,
         }
 
     async def initialize_and_set_state(self):
@@ -72,28 +73,20 @@ class WiiMMediaPlayer(MediaPlayer):
         if not self._client:
             return
         
-        # Set up comprehensive source list for activity integration (inputs + outputs + special commands)
         source_list = []
-        
-        # Add input sources
         if self._client.sources:
             source_list.extend(list(self._client.sources.keys()))
         
-        # Add special WiiM functions that can be controlled via source selection
         special_functions = [
-            'display_on',     # Turn display on
-            'display_off',    # Turn display off
-            'reboot_device',  # Reboot device (use with caution)
-            'toggle_display', # Toggle display on/off
+            'display_on', 'display_off', 'reboot_device', 'toggle_display'
         ]
         source_list.extend(special_functions)
         
         self.attributes[Attributes.SOURCE_LIST] = source_list
-        _LOG.info("Initialized source list for activities (inputs + special functions): %s", source_list)
+        _LOG.info("Initialized source list: %s", source_list)
         
         await self.update_attributes()
         self._initialized = True
-        _LOG.info("Media Player initialized with source selection and display control capabilities")
 
     async def update_attributes(self):
         """Update entity attributes from device state."""
@@ -128,16 +121,27 @@ class WiiMMediaPlayer(MediaPlayer):
         player_status = status.get('status', 'stop').lower()
         current_mode = int(status.get('mode', 0))
         
-        # Check if source/mode has changed or if we need to force clear
-        if (self._last_mode is not None and self._last_mode != current_mode) or self._metadata_clear_pending:
-            _LOG.debug("Source changed from mode %s to %s or force clear requested, clearing old metadata", 
-                      self._last_mode, current_mode)
+        # CRITICAL FIX: Check for both mode changes AND status changes that indicate source switching
+        mode_changed = self._last_mode is not None and self._last_mode != current_mode
+        
+        # Enhanced clearing logic: Clear when switching away from rich metadata sources
+        needs_clearing = (
+            mode_changed or 
+            self._metadata_clear_pending or
+            self._should_force_metadata_clear(current_mode, player_status)
+        )
+        
+        if needs_clearing:
+            _LOG.info("🧹 CLEARING METADATA - Mode: %s→%s, Status: %s→%s, Force: %s", 
+                     self._last_mode, current_mode, self._last_status, player_status, 
+                     self._metadata_clear_pending)
             self._clear_all_media_info()
             self._metadata_clear_pending = False
-            # Wait a moment for device to stabilize before getting new metadata
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.3)  # Brief stabilization delay
         
+        # Update tracking variables
         self._last_mode = current_mode
+        self._last_status = player_status
         
         _LOG.debug("Player status: %s, Mode: %s", player_status, current_mode)
         
@@ -153,6 +157,30 @@ class WiiMMediaPlayer(MediaPlayer):
         else:
             self._clear_all_media_info()
             self._handle_state_update(States.STANDBY)
+
+    def _should_force_metadata_clear(self, current_mode: int, current_status: str) -> bool:
+        """Determine if we should force clear metadata based on source characteristics."""
+        # Spotify Connect mode
+        spotify_mode = 31
+        
+        # Network/radio modes that typically have minimal metadata
+        radio_modes = [10, 11, 16]  # Network modes
+        
+        # Force clear when switching FROM Spotify TO radio/network modes
+        if (self._last_mode == spotify_mode and 
+            current_mode in radio_modes and 
+            current_status in ['play', 'loading']):
+            _LOG.info("🎯 FORCE CLEAR: Spotify → Radio/Network transition detected")
+            return True
+            
+        # Force clear when going from any mode with meaningful metadata to stop
+        if (self._last_meaningful_metadata and 
+            current_status == 'stop' and 
+            self._last_status in ['play', 'pause']):
+            _LOG.info("🎯 FORCE CLEAR: Playback stopped, clearing stale metadata")
+            return True
+            
+        return False
 
     def _update_source_info(self, status: dict):
         """Update current source based on mode."""
@@ -178,30 +206,77 @@ class WiiMMediaPlayer(MediaPlayer):
             Attributes.MEDIA_IMAGE_URL, Attributes.MEDIA_DURATION, 
             Attributes.MEDIA_POSITION, Attributes.MEDIA_TYPE
         ]
+        
+        # Track what we're clearing for debugging
+        cleared_attrs = []
         for attr in media_attrs:
-            self.attributes.pop(attr, None)
-        _LOG.debug("Cleared ALL media information attributes")
+            if attr in self.attributes:
+                cleared_attrs.append(attr.value)
+                self.attributes.pop(attr, None)
+        
+        if cleared_attrs:
+            _LOG.info("🧹 CLEARED ATTRIBUTES: %s", cleared_attrs)
+        
+        # Clear our tracking of meaningful metadata
+        self._last_meaningful_metadata.clear()
 
     async def _update_media_info(self, player_status: dict):
         """Update media information from metadata."""
         try:
             metadata = await self._client.get_track_metadata()
             
-            # ALWAYS clear all media info first to prevent stale data
-            self._clear_all_media_info()
-            
             if not metadata:
                 _LOG.debug("No metadata available from device")
                 return
                 
-            # Set only the valid metadata fields we receive
-            self._set_media_metadata(metadata)
-            self._set_position_duration(player_status)
-            self._set_media_type(player_status)
+            # Check if this is meaningful metadata or just placeholders
+            if self._has_meaningful_metadata(metadata):
+                _LOG.debug("📋 Processing meaningful metadata")
+                self._set_media_metadata(metadata)
+                self._set_position_duration(player_status)
+                self._set_media_type(player_status)
+                
+                # Store meaningful metadata for clearing logic
+                self._last_meaningful_metadata = metadata.copy()
+            else:
+                _LOG.debug("📋 Placeholder metadata detected, not setting attributes")
+                # For placeholder metadata (radio stations), only set title if it's not a placeholder
+                title = self._clean_metadata(metadata.get('title'))
+                if title:
+                    self.attributes[Attributes.MEDIA_TITLE] = title
+                    _LOG.debug("Set radio title: %s", title)
+                    
+                # Set image URL if available for radio
+                if image_url := self._clean_metadata(metadata.get('albumArtURI')):
+                    self.attributes[Attributes.MEDIA_IMAGE_URL] = image_url
+                    _LOG.debug("Set radio image: %s", image_url)
+                
+                # Set media type for radio
+                self._set_media_type(player_status)
                 
         except Exception as e:
             _LOG.error("Error updating media info: %s", e)
             self._clear_all_media_info()
+
+    def _has_meaningful_metadata(self, metadata: dict) -> bool:
+        """Check if metadata contains meaningful information (not placeholders)."""
+        if not metadata:
+            return False
+            
+        # Check for non-placeholder values in key fields
+        meaningful_fields = ['title', 'artist', 'album']
+        for field in meaningful_fields:
+            if self._clean_metadata(metadata.get(field)):
+                # If we have at least title OR (artist and album), consider it meaningful
+                if field == 'title':
+                    return True
+                elif field in ['artist', 'album']:
+                    # Need both artist and album to be meaningful
+                    artist = self._clean_metadata(metadata.get('artist'))
+                    album = self._clean_metadata(metadata.get('album'))
+                    if artist and album:
+                        return True
+        return False
 
     def _set_media_metadata(self, metadata: dict):
         """Set media metadata attributes - only for valid values."""
@@ -240,7 +315,6 @@ class WiiMMediaPlayer(MediaPlayer):
                 _LOG.debug("Set media position: %s seconds", position)
         else:
             # For radio/streaming: explicitly ensure no duration or position
-            # This prevents seek bars from appearing
             _LOG.debug("Radio/stream detected (duration=0), not setting position/duration")
 
     def _set_media_type(self, player_status: dict):
@@ -290,7 +364,6 @@ class WiiMMediaPlayer(MediaPlayer):
         try:
             _LOG.info("Handling command: %s with params: %s", cmd_id, params)
             
-            # Removed ON/OFF commands as WiiM devices don't support power on/off
             command_map = {
                 Commands.TOGGLE: self._client.toggle_playback,
                 Commands.PLAY_PAUSE: self._client.toggle_playback,
@@ -315,13 +388,12 @@ class WiiMMediaPlayer(MediaPlayer):
                 # Set flag to clear metadata on next update for regular sources
                 if source not in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
                     self._metadata_clear_pending = True
+                    _LOG.info("🧹 METADATA CLEAR PENDING: Source switch to %s", source)
                 
                 # Handle different types of source/function switching
                 if source in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
-                    # Special device functions
                     await self._handle_device_function(source)
                 else:
-                    # Regular input source switching
                     await self._client.send_command(f"setPlayerCmd:switchmode:{source}")
                 
                 # Force immediate state update for regular source changes only
@@ -345,17 +417,14 @@ class WiiMMediaPlayer(MediaPlayer):
     async def _handle_device_function(self, function: str):
         """Handle WiiM device special functions."""
         try:
-            # Map function names to WiiM API commands based on official documentation
             function_commands = {
                 'display_on': 'setLightOperationBrightConfig:{"disable":0}',
                 'display_off': 'setLightOperationBrightConfig:{"disable":1}',
-                'toggle_display': None,  # Will handle separately
+                'toggle_display': None,
                 'reboot_device': 'reboot'
             }
             
             if function == 'toggle_display':
-                # Toggle display requires checking current state (not easily available)
-                # Default to display off for safety
                 command = 'setLightOperationBrightConfig:{"disable":1}'
                 _LOG.info("Toggle display - defaulting to display off")
             else:
@@ -366,7 +435,7 @@ class WiiMMediaPlayer(MediaPlayer):
                 await self._client.send_command(command)
                 
                 if function == 'reboot_device':
-                    _LOG.warning("Device reboot command sent - device will be unavailable during restart")
+                    _LOG.warning("Device reboot command sent")
             else:
                 _LOG.warning("Unknown device function: %s", function)
                 
@@ -375,7 +444,7 @@ class WiiMMediaPlayer(MediaPlayer):
 
     async def _immediate_update_after_source_change(self):
         """Immediate update after source change to clear stale metadata faster."""
-        await asyncio.sleep(0.5)  # Brief wait for device to process command
+        await asyncio.sleep(0.5)
         await self.update_attributes()
 
     async def _deferred_update(self):

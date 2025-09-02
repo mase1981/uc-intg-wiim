@@ -222,17 +222,26 @@ class WiiMMediaPlayer(MediaPlayer):
             _LOG.debug("Set media image URL: %s", image_url)
 
     def _set_position_duration(self, player_status: dict):
-        """Set position and duration attributes."""
+        """Set position and duration attributes - only for tracks with duration."""
+        # Get duration first to determine if this is a track or stream
+        duration = 0
         if 'totlen' in player_status:
             duration = int(player_status['totlen']) // 1000
-            if duration > 0:
-                self.attributes[Attributes.MEDIA_DURATION] = duration
-                _LOG.debug("Set media duration: %s", duration)
-                
-        if 'curpos' in player_status:
-            position = int(player_status['curpos']) // 1000
-            self.attributes[Attributes.MEDIA_POSITION] = position
-            _LOG.debug("Set media position: %s", position)
+            
+        # Only set duration and position for actual tracks (duration > 0)
+        # Radio streams and live content should not have seek functionality
+        if duration > 0:
+            self.attributes[Attributes.MEDIA_DURATION] = duration
+            _LOG.debug("Set media duration: %s seconds", duration)
+            
+            if 'curpos' in player_status:
+                position = int(player_status['curpos']) // 1000
+                self.attributes[Attributes.MEDIA_POSITION] = position
+                _LOG.debug("Set media position: %s seconds", position)
+        else:
+            # For radio/streaming: explicitly ensure no duration or position
+            # This prevents seek bars from appearing
+            _LOG.debug("Radio/stream detected (duration=0), not setting position/duration")
 
     def _set_media_type(self, player_status: dict):
         """Set media type based on mode."""

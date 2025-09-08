@@ -5,7 +5,7 @@
   "description": {
     "en": "Integration for WiiM audio streaming devices including Ultra, Pro, Mini, and Amp models."
   },
-  "version": "1.0.2",
+  "version": "1.0.9",
   "developer": { 
     "name": "Meir Miyara",
     "email": "meir.miyara@gmail.com"

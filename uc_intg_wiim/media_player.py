@@ -38,9 +38,9 @@ class WiiMMediaPlayer(MediaPlayer):
         self._integration_api = None
         self._initialized = False
         self._last_mode = None
-        self._last_status = None  # Track status changes too
+        self._last_status = None
         self._metadata_clear_pending = False
-        self._last_meaningful_metadata = {}  # Track last meaningful metadata
+        self._last_meaningful_metadata = {}
 
     def set_client(self, client):
         """Set the WiiM client."""
@@ -121,10 +121,9 @@ class WiiMMediaPlayer(MediaPlayer):
         player_status = status.get('status', 'stop').lower()
         current_mode = int(status.get('mode', 0))
         
-        # CRITICAL FIX: Check for both mode changes AND status changes that indicate source switching
+        # Enhanced clearing logic to fix the Spotify->Radio metadata persistence bug
         mode_changed = self._last_mode is not None and self._last_mode != current_mode
         
-        # Enhanced clearing logic: Clear when switching away from rich metadata sources
         needs_clearing = (
             mode_changed or 
             self._metadata_clear_pending or
@@ -137,7 +136,7 @@ class WiiMMediaPlayer(MediaPlayer):
                      self._metadata_clear_pending)
             self._clear_all_media_info()
             self._metadata_clear_pending = False
-            await asyncio.sleep(0.3)  # Brief stabilization delay
+            await asyncio.sleep(0.3)
         
         # Update tracking variables
         self._last_mode = current_mode
@@ -145,7 +144,7 @@ class WiiMMediaPlayer(MediaPlayer):
         
         _LOG.debug("Player status: %s, Mode: %s", player_status, current_mode)
         
-        if player_status in ['play', 'loading']:
+        if player_status in ['play', 'loading', 'load']:
             await self._update_media_info(status)
             self._handle_state_update(States.PLAYING)
         elif player_status == 'pause':
@@ -160,16 +159,13 @@ class WiiMMediaPlayer(MediaPlayer):
 
     def _should_force_metadata_clear(self, current_mode: int, current_status: str) -> bool:
         """Determine if we should force clear metadata based on source characteristics."""
-        # Spotify Connect mode
         spotify_mode = 31
-        
-        # Network/radio modes that typically have minimal metadata
-        radio_modes = [10, 11, 16]  # Network modes
+        radio_modes = [10, 11, 16]
         
         # Force clear when switching FROM Spotify TO radio/network modes
         if (self._last_mode == spotify_mode and 
             current_mode in radio_modes and 
-            current_status in ['play', 'loading']):
+            current_status in ['play', 'loading', 'load']):
             _LOG.info("🎯 FORCE CLEAR: Spotify → Radio/Network transition detected")
             return True
             
@@ -207,7 +203,6 @@ class WiiMMediaPlayer(MediaPlayer):
             Attributes.MEDIA_POSITION, Attributes.MEDIA_TYPE
         ]
         
-        # Track what we're clearing for debugging
         cleared_attrs = []
         for attr in media_attrs:
             if attr in self.attributes:
@@ -217,7 +212,6 @@ class WiiMMediaPlayer(MediaPlayer):
         if cleared_attrs:
             _LOG.info("🧹 CLEARED ATTRIBUTES: %s", cleared_attrs)
         
-        # Clear our tracking of meaningful metadata
         self._last_meaningful_metadata.clear()
 
     async def _update_media_info(self, player_status: dict):
@@ -229,29 +223,27 @@ class WiiMMediaPlayer(MediaPlayer):
                 _LOG.debug("No metadata available from device")
                 return
                 
-            # Check if this is meaningful metadata or just placeholders
+            # Set position/duration FIRST (this handles the seek bar issue)
+            self._set_position_duration(player_status)
+            
+            # Then handle metadata based on whether it's meaningful
             if self._has_meaningful_metadata(metadata):
-                _LOG.debug("📋 Processing meaningful metadata")
+                _LOG.debug("📋 Processing meaningful metadata (full track info)")
                 self._set_media_metadata(metadata)
-                self._set_position_duration(player_status)
                 self._set_media_type(player_status)
-                
-                # Store meaningful metadata for clearing logic
                 self._last_meaningful_metadata = metadata.copy()
             else:
-                _LOG.debug("📋 Placeholder metadata detected, not setting attributes")
-                # For placeholder metadata (radio stations), only set title if it's not a placeholder
+                _LOG.debug("📋 Processing radio/stream metadata (title + image only)")
+                # For radio streams, only set title and image if available
                 title = self._clean_metadata(metadata.get('title'))
                 if title:
                     self.attributes[Attributes.MEDIA_TITLE] = title
                     _LOG.debug("Set radio title: %s", title)
                     
-                # Set image URL if available for radio
                 if image_url := self._clean_metadata(metadata.get('albumArtURI')):
                     self.attributes[Attributes.MEDIA_IMAGE_URL] = image_url
                     _LOG.debug("Set radio image: %s", image_url)
                 
-                # Set media type for radio
                 self._set_media_type(player_status)
                 
         except Exception as e:
@@ -264,19 +256,13 @@ class WiiMMediaPlayer(MediaPlayer):
             return False
             
         # Check for non-placeholder values in key fields
-        meaningful_fields = ['title', 'artist', 'album']
-        for field in meaningful_fields:
-            if self._clean_metadata(metadata.get(field)):
-                # If we have at least title OR (artist and album), consider it meaningful
-                if field == 'title':
-                    return True
-                elif field in ['artist', 'album']:
-                    # Need both artist and album to be meaningful
-                    artist = self._clean_metadata(metadata.get('artist'))
-                    album = self._clean_metadata(metadata.get('album'))
-                    if artist and album:
-                        return True
-        return False
+        title = self._clean_metadata(metadata.get('title'))
+        artist = self._clean_metadata(metadata.get('artist'))
+        album = self._clean_metadata(metadata.get('album'))
+        
+        # Consider it meaningful if we have title AND (artist OR album)
+        # This distinguishes between full tracks vs radio stations
+        return bool(title and (artist or album))
 
     def _set_media_metadata(self, metadata: dict):
         """Set media metadata attributes - only for valid values."""
@@ -297,14 +283,23 @@ class WiiMMediaPlayer(MediaPlayer):
             _LOG.debug("Set media image URL: %s", image_url)
 
     def _set_position_duration(self, player_status: dict):
-        """Set position and duration attributes - only for tracks with duration."""
+        """Set position and duration attributes - EXPLICITLY handle radio streams."""
         # Get duration first to determine if this is a track or stream
         duration = 0
         if 'totlen' in player_status:
             duration = int(player_status['totlen']) // 1000
             
+        # CRITICAL FIX: Always explicitly remove duration/position first
+        # This ensures the Remote UI gets a clear signal that these should not be shown
+        if Attributes.MEDIA_DURATION in self.attributes:
+            self.attributes.pop(Attributes.MEDIA_DURATION, None)
+            _LOG.debug("Explicitly removed duration attribute")
+            
+        if Attributes.MEDIA_POSITION in self.attributes:
+            self.attributes.pop(Attributes.MEDIA_POSITION, None)
+            _LOG.debug("Explicitly removed position attribute")
+        
         # Only set duration and position for actual tracks (duration > 0)
-        # Radio streams and live content should not have seek functionality
         if duration > 0:
             self.attributes[Attributes.MEDIA_DURATION] = duration
             _LOG.debug("Set media duration: %s seconds", duration)
@@ -314,8 +309,8 @@ class WiiMMediaPlayer(MediaPlayer):
                 self.attributes[Attributes.MEDIA_POSITION] = position
                 _LOG.debug("Set media position: %s seconds", position)
         else:
-            # For radio/streaming: explicitly ensure no duration or position
-            _LOG.debug("Radio/stream detected (duration=0), not setting position/duration")
+            # For radio/streaming: explicitly log that we're NOT setting these
+            _LOG.debug("Radio/stream detected (duration=0) - duration/position explicitly removed")
 
     def _set_media_type(self, player_status: dict):
         """Set media type based on mode."""
@@ -396,7 +391,7 @@ class WiiMMediaPlayer(MediaPlayer):
                 else:
                     await self._client.send_command(f"setPlayerCmd:switchmode:{source}")
                 
-                # Force immediate state update for regular source changes only
+                # Force immediate state update for regular source changes
                 if source not in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
                     asyncio.create_task(self._immediate_update_after_source_change())
             else:

@@ -295,7 +295,9 @@ class WiiMMediaPlayer(MediaPlayer):
     def _set_media_type(self, player_status: dict):
         """Set media type based on mode."""
         mode = int(player_status.get('mode', 0))
-        if mode in [31, 32, 10, 11, 16]:
+        duration = int(player_status.get('totlen', 0)) // 1000 if 'totlen' in player_status else 0
+        
+        if mode in [31, 32, 10, 11, 16] and duration > 0:
             self.attributes[Attributes.MEDIA_TYPE] = MediaType.MUSIC
 
     def _clean_metadata(self, value: Optional[str]) -> Optional[str]:

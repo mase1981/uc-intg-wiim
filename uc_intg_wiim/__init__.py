@@ -8,7 +8,7 @@ A professional integration for controlling WiiM audio streaming devices
 :license: MIT, see LICENSE for more details.
 """
 
-__version__ = "1.0.9"
+__version__ = "1.0.10"
 __author__ = "Meir Miyara"
 __email__ = "meir.miyara@gmail.com"
 __license__ = "MIT"

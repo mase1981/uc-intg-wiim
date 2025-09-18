@@ -131,7 +131,7 @@ class WiiMMediaPlayer(MediaPlayer):
         )
         
         if needs_clearing:
-            _LOG.info("🧹 CLEARING METADATA - Mode: %s→%s, Status: %s→%s, Force: %s", 
+            _LOG.info("CLEARING METADATA - Mode: %s→%s, Status: %s→%s, Force: %s", 
                      self._last_mode, current_mode, self._last_status, player_status, 
                      self._metadata_clear_pending)
             self._clear_all_media_info()
@@ -166,14 +166,14 @@ class WiiMMediaPlayer(MediaPlayer):
         if (self._last_mode == spotify_mode and 
             current_mode in radio_modes and 
             current_status in ['play', 'loading', 'load']):
-            _LOG.info("🎯 FORCE CLEAR: Spotify → Radio/Network transition detected")
+            _LOG.info("FORCE CLEAR: Spotify → Radio/Network transition detected")
             return True
             
         # Force clear when going from any mode with meaningful metadata to stop
         if (self._last_meaningful_metadata and 
             current_status == 'stop' and 
             self._last_status in ['play', 'pause']):
-            _LOG.info("🎯 FORCE CLEAR: Playback stopped, clearing stale metadata")
+            _LOG.info("FORCE CLEAR: Playback stopped, clearing stale metadata")
             return True
             
         return False
@@ -197,21 +197,16 @@ class WiiMMediaPlayer(MediaPlayer):
 
     def _clear_all_media_info(self):
         """Clear ALL media information attributes."""
-        media_attrs = [
-            Attributes.MEDIA_TITLE, Attributes.MEDIA_ARTIST, Attributes.MEDIA_ALBUM,
-            Attributes.MEDIA_IMAGE_URL, Attributes.MEDIA_DURATION, 
-            Attributes.MEDIA_POSITION, Attributes.MEDIA_TYPE
-        ]
+        self.attributes[Attributes.MEDIA_TITLE] = ""
+        self.attributes[Attributes.MEDIA_ARTIST] = ""
+        self.attributes[Attributes.MEDIA_ALBUM] = ""
+        self.attributes[Attributes.MEDIA_IMAGE_URL] = ""
         
-        cleared_attrs = []
-        for attr in media_attrs:
-            if attr in self.attributes:
-                cleared_attrs.append(attr.value)
-                self.attributes.pop(attr, None)
+        self.attributes.pop(Attributes.MEDIA_DURATION, None)
+        self.attributes.pop(Attributes.MEDIA_POSITION, None)
+        self.attributes.pop(Attributes.MEDIA_TYPE, None)
         
-        if cleared_attrs:
-            _LOG.info("🧹 CLEARED ATTRIBUTES: %s", cleared_attrs)
-        
+        _LOG.info("CLEARED ATTRIBUTES: Set media strings to empty, removed duration/position")
         self._last_meaningful_metadata.clear()
 
     async def _update_media_info(self, player_status: dict):
@@ -228,12 +223,12 @@ class WiiMMediaPlayer(MediaPlayer):
             
             # Then handle metadata based on whether it's meaningful
             if self._has_meaningful_metadata(metadata):
-                _LOG.debug("📋 Processing meaningful metadata (full track info)")
+                _LOG.debug("ðŸ"‹ Processing meaningful metadata (full track info)")
                 self._set_media_metadata(metadata)
                 self._set_media_type(player_status)
                 self._last_meaningful_metadata = metadata.copy()
             else:
-                _LOG.debug("📋 Processing radio/stream metadata (title + image only)")
+                _LOG.debug("ðŸ"‹ Processing radio/stream metadata (title + image only)")
                 # For radio streams, only set title and image if available
                 title = self._clean_metadata(metadata.get('title'))
                 if title:
@@ -260,8 +255,6 @@ class WiiMMediaPlayer(MediaPlayer):
         artist = self._clean_metadata(metadata.get('artist'))
         album = self._clean_metadata(metadata.get('album'))
         
-        # Consider it meaningful if we have title AND (artist OR album)
-        # This distinguishes between full tracks vs radio stations
         return bool(title and (artist or album))
 
     def _set_media_metadata(self, metadata: dict):
@@ -309,7 +302,6 @@ class WiiMMediaPlayer(MediaPlayer):
                 self.attributes[Attributes.MEDIA_POSITION] = position
                 _LOG.debug("Set media position: %s seconds", position)
         else:
-            # For radio/streaming: explicitly log that we're NOT setting these
             _LOG.debug("Radio/stream detected (duration=0) - duration/position explicitly removed")
 
     def _set_media_type(self, player_status: dict):
@@ -383,7 +375,7 @@ class WiiMMediaPlayer(MediaPlayer):
                 # Set flag to clear metadata on next update for regular sources
                 if source not in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
                     self._metadata_clear_pending = True
-                    _LOG.info("🧹 METADATA CLEAR PENDING: Source switch to %s", source)
+                    _LOG.info("METADATA CLEAR PENDING: Source switch to %s", source)
                 
                 # Handle different types of source/function switching
                 if source in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:

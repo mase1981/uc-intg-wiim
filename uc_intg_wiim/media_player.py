@@ -121,7 +121,6 @@ class WiiMMediaPlayer(MediaPlayer):
         player_status = status.get('status', 'stop').lower()
         current_mode = int(status.get('mode', 0))
         
-        # Enhanced clearing logic to fix the Spotify->Radio metadata persistence bug
         mode_changed = self._last_mode is not None and self._last_mode != current_mode
         
         needs_clearing = (
@@ -131,14 +130,13 @@ class WiiMMediaPlayer(MediaPlayer):
         )
         
         if needs_clearing:
-            _LOG.info("CLEARING METADATA - Mode: %s→%s, Status: %s→%s, Force: %s", 
+            _LOG.info("CLEARING METADATA - Mode: %s->%s, Status: %s->%s, Force: %s", 
                      self._last_mode, current_mode, self._last_status, player_status, 
                      self._metadata_clear_pending)
             self._clear_all_media_info()
             self._metadata_clear_pending = False
             await asyncio.sleep(0.3)
         
-        # Update tracking variables
         self._last_mode = current_mode
         self._last_status = player_status
         
@@ -162,14 +160,12 @@ class WiiMMediaPlayer(MediaPlayer):
         spotify_mode = 31
         radio_modes = [10, 11, 16]
         
-        # Force clear when switching FROM Spotify TO radio/network modes
         if (self._last_mode == spotify_mode and 
             current_mode in radio_modes and 
             current_status in ['play', 'loading', 'load']):
-            _LOG.info("FORCE CLEAR: Spotify → Radio/Network transition detected")
+            _LOG.info("FORCE CLEAR: Spotify -> Radio/Network transition detected")
             return True
             
-        # Force clear when going from any mode with meaningful metadata to stop
         if (self._last_meaningful_metadata and 
             current_status == 'stop' and 
             self._last_status in ['play', 'pause']):
@@ -182,12 +178,12 @@ class WiiMMediaPlayer(MediaPlayer):
         """Update current source based on mode."""
         mode = int(status.get('mode', 0))
         source_map = {
-            31: 'wifi',        # Spotify Connect
-            32: 'wifi',        # TIDAL Connect  
-            40: 'line-in',     # AUX-In
-            41: 'bluetooth',   # Bluetooth
-            43: 'optical',     # Optical
-            10: 'wifi',        # Network modes
+            31: 'wifi',
+            32: 'wifi',
+            40: 'line-in',
+            41: 'bluetooth',
+            43: 'optical',
+            10: 'wifi',
             11: 'wifi',
             16: 'wifi'
         }
@@ -218,18 +214,15 @@ class WiiMMediaPlayer(MediaPlayer):
                 _LOG.debug("No metadata available from device")
                 return
                 
-            # Set position/duration FIRST (this handles the seek bar issue)
             self._set_position_duration(player_status)
             
-            # Then handle metadata based on whether it's meaningful
             if self._has_meaningful_metadata(metadata):
-                _LOG.debug("ðŸ"‹ Processing meaningful metadata (full track info)")
+                _LOG.debug("Processing meaningful metadata (full track info)")
                 self._set_media_metadata(metadata)
                 self._set_media_type(player_status)
                 self._last_meaningful_metadata = metadata.copy()
             else:
-                _LOG.debug("ðŸ"‹ Processing radio/stream metadata (title + image only)")
-                # For radio streams, only set title and image if available
+                _LOG.debug("Processing radio/stream metadata (title + image only)")
                 title = self._clean_metadata(metadata.get('title'))
                 if title:
                     self.attributes[Attributes.MEDIA_TITLE] = title
@@ -250,7 +243,6 @@ class WiiMMediaPlayer(MediaPlayer):
         if not metadata:
             return False
             
-        # Check for non-placeholder values in key fields
         title = self._clean_metadata(metadata.get('title'))
         artist = self._clean_metadata(metadata.get('artist'))
         album = self._clean_metadata(metadata.get('album'))
@@ -277,13 +269,10 @@ class WiiMMediaPlayer(MediaPlayer):
 
     def _set_position_duration(self, player_status: dict):
         """Set position and duration attributes - EXPLICITLY handle radio streams."""
-        # Get duration first to determine if this is a track or stream
         duration = 0
         if 'totlen' in player_status:
             duration = int(player_status['totlen']) // 1000
             
-        # CRITICAL FIX: Always explicitly remove duration/position first
-        # This ensures the Remote UI gets a clear signal that these should not be shown
         if Attributes.MEDIA_DURATION in self.attributes:
             self.attributes.pop(Attributes.MEDIA_DURATION, None)
             _LOG.debug("Explicitly removed duration attribute")
@@ -292,7 +281,6 @@ class WiiMMediaPlayer(MediaPlayer):
             self.attributes.pop(Attributes.MEDIA_POSITION, None)
             _LOG.debug("Explicitly removed position attribute")
         
-        # Only set duration and position for actual tracks (duration > 0)
         if duration > 0:
             self.attributes[Attributes.MEDIA_DURATION] = duration
             _LOG.debug("Set media duration: %s seconds", duration)
@@ -307,7 +295,7 @@ class WiiMMediaPlayer(MediaPlayer):
     def _set_media_type(self, player_status: dict):
         """Set media type based on mode."""
         mode = int(player_status.get('mode', 0))
-        if mode in [31, 32, 10, 11, 16]:  # Music streaming modes
+        if mode in [31, 32, 10, 11, 16]:
             self.attributes[Attributes.MEDIA_TYPE] = MediaType.MUSIC
 
     def _clean_metadata(self, value: Optional[str]) -> Optional[str]:
@@ -335,11 +323,11 @@ class WiiMMediaPlayer(MediaPlayer):
     def _parse_repeat_mode(self, loop_mode: str) -> str:
         """Parse loop mode to repeat mode."""
         mode_map = {
-            '0': 'off',    # loop all
-            '1': 'one',    # single loop
-            '2': 'all',    # shuffle loop
-            '3': 'off',    # shuffle, no loop
-            '4': 'off'     # no shuffle, no loop
+            '0': 'off',
+            '1': 'one',
+            '2': 'all',
+            '3': 'off',
+            '4': 'off'
         }
         return mode_map.get(str(loop_mode), 'off')
 
@@ -372,25 +360,21 @@ class WiiMMediaPlayer(MediaPlayer):
                 source = params['source']
                 _LOG.info("Switching to source/function: %s", source)
                 
-                # Set flag to clear metadata on next update for regular sources
                 if source not in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
                     self._metadata_clear_pending = True
                     _LOG.info("METADATA CLEAR PENDING: Source switch to %s", source)
                 
-                # Handle different types of source/function switching
                 if source in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
                     await self._handle_device_function(source)
                 else:
                     await self._client.send_command(f"setPlayerCmd:switchmode:{source}")
                 
-                # Force immediate state update for regular source changes
                 if source not in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
                     asyncio.create_task(self._immediate_update_after_source_change())
             else:
                 _LOG.warning("Unhandled command: %s", cmd_id)
                 return StatusCodes.NOT_IMPLEMENTED
             
-            # Only defer update for non-special commands
             if not (cmd_id == Commands.SELECT_SOURCE and params.get('source') in 
                    ['display_on', 'display_off', 'toggle_display', 'reboot_device']):
                 asyncio.create_task(self._deferred_update())

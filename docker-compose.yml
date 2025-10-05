@@ -2,39 +2,16 @@ version: '3.8'
 
 services:
   wiim-integration:
-    image: ghcr.io/mase1981/uc-intg-wiim:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: uc-intg-wiim
     restart: unless-stopped
-    
-    ports:
-      - "9090:9090"
-    
-    environment:
-      - UC_INTEGRATION_HTTP_PORT=9090
-      - UC_INTEGRATION_INTERFACE=0.0.0.0
-      - UC_CONFIG_HOME=/config
-      - UC_DISABLE_MDNS_PUBLISH=false
-    
+    network_mode: host  # Required for device discovery
     volumes:
-      - ./config:/config
-      - /etc/localtime:/etc/localtime:ro
-    
-    networks:
-      - wiim-network
-    
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-networks:
-  wiim-network:
-    driver: bridge
+      - ./data:/data  # Persistent configuration storage
+    environment:
+      - UC_CONFIG_HOME=/data
+      - UC_INTEGRATION_INTERFACE=0.0.0.0
+      - UC_INTEGRATION_HTTP_PORT=9090
+      - UC_DISABLE_MDNS_PUBLISH=false

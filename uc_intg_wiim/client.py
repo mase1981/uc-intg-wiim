@@ -25,6 +25,7 @@ class WiiMClient:
         self.sources: Dict[str, str] = {}
         self.eq_presets: List[str] = []
         self.presets: List[Dict[str, Any]] = []
+        self.audio_outputs: Dict[str, str] = {}  # Initialize as empty dict
         self._last_command_time = 0
         self._throttle_delay = 0.2
 
@@ -80,19 +81,86 @@ class WiiMClient:
         _LOG.info("Discovering device capabilities...")
         
         if await self.get_device_info():
+            # Discover EQ presets
             if eq_list := await self.get_eq_list():
                 self.eq_presets = eq_list
                 _LOG.info("Discovered %d EQ presets", len(self.eq_presets))
                 
+            # Discover user presets    
             if preset_info := await self.get_preset_info():
                 self.presets = preset_info.get('preset_list', [])
                 _LOG.info("Discovered %d user presets", len(self.presets))
+                
+            # Discover audio outputs
+            await self._discover_audio_outputs()
         
+        # Set up default input sources (these are standard across WiiM devices)
         self.sources = {
             'wifi': 'WiFi', 'bluetooth': 'Bluetooth', 'line-in': 'Line In',
             'optical': 'Optical', 'HDMI': 'HDMI', 'phono': 'Phono', 'udisk': 'USB'
         }
         _LOG.info("Capability discovery completed")
+
+    async def _discover_audio_outputs(self):
+        """Discover available audio output modes."""
+        try:
+            resp = await self.send_command("getNewAudioOutputHardwareMode")
+            if not resp:
+                _LOG.warning("Could not query audio output capabilities")
+                self._set_fallback_audio_outputs()
+                return
+                
+            try:
+                output_info = json.loads(resp)
+                _LOG.info("Audio output info: %s", output_info)
+                
+                # Build available outputs based on device response and API documentation
+                self.audio_outputs = {}
+                
+                # Standard audio output modes from API documentation
+                output_modes = {
+                    '1': 'SPDIF',
+                    '2': 'AUX/Line Out', 
+                    '3': 'COAX'
+                }
+                
+                # Current hardware mode from device response
+                current_hardware = output_info.get('hardware', '0')
+                _LOG.info("Current hardware output mode: %s (%s)", current_hardware, 
+                         output_modes.get(current_hardware, 'Unknown'))
+                
+                # Add all standard modes (most WiiM devices support all three)
+                for mode_id, mode_name in output_modes.items():
+                    cmd_name = f"output_{mode_name.lower().replace('/', '_').replace(' ', '_')}"
+                    self.audio_outputs[cmd_name] = mode_name
+                
+                # Check for additional output capabilities
+                if output_info.get('source', '0') == '1':
+                    self.audio_outputs['output_bt_source'] = 'BT Source Output'
+                    _LOG.info("BT Source Output capability detected")
+                    
+                if output_info.get('audiocast', '0') == '1':
+                    self.audio_outputs['output_audiocast'] = 'Audio Cast Output'
+                    _LOG.info("Audio Cast Output capability detected")
+                
+                _LOG.info("Discovered audio outputs: %s", list(self.audio_outputs.keys()))
+                
+            except json.JSONDecodeError:
+                _LOG.warning("Could not parse audio output info JSON: %s", resp)
+                self._set_fallback_audio_outputs()
+                
+        except Exception as e:
+            _LOG.error("Error discovering audio outputs: %s", e)
+            self._set_fallback_audio_outputs()
+
+    def _set_fallback_audio_outputs(self):
+        """Set fallback audio outputs for when discovery fails."""
+        self.audio_outputs = {
+            'output_spdif': 'SPDIF',
+            'output_aux_line_out': 'AUX/Line Out',
+            'output_coax': 'COAX'
+        }
+        _LOG.info("Using fallback audio outputs: %s", list(self.audio_outputs.keys()))
 
     async def get_device_info(self) -> Optional[Dict[str, Any]]:
         """Get device information."""
@@ -133,6 +201,19 @@ class WiiMClient:
             return json.loads(resp) if resp else None
         except json.JSONDecodeError:
             return None
+
+    async def get_audio_output_info(self) -> Optional[Dict[str, Any]]:
+        """Get current audio output configuration."""
+        resp = await self.send_command("getNewAudioOutputHardwareMode")
+        try:
+            return json.loads(resp) if resp else None
+        except json.JSONDecodeError:
+            return None
+
+    async def set_audio_output_mode(self, mode: int) -> bool:
+        """Set audio output hardware mode."""
+        resp = await self.send_command(f"setAudioOutputHardwareMode:{mode}")
+        return resp == "OK"
 
     async def resume_playback(self):
         """Resume playback."""

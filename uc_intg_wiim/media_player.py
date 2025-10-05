@@ -74,16 +74,30 @@ class WiiMMediaPlayer(MediaPlayer):
             return
         
         source_list = []
+        
+        # Add physical input sources
         if self._client.sources:
             source_list.extend(list(self._client.sources.keys()))
         
+        # Add discovered music services from presets
+        if self._client.presets:
+            services_found = set()
+            for preset in self._client.presets:
+                source = preset.get('source', '')
+                if source and source not in services_found:
+                    # Use clean service name (appears as: "Spotify", "Pandora", "TIDAL Connect")
+                    source_list.append(source)
+                    services_found.add(source)
+                    _LOG.info("Added music service to source list: %s", source)
+        
+        # Add special device functions
         special_functions = [
             'display_on', 'display_off', 'reboot_device', 'toggle_display'
         ]
         source_list.extend(special_functions)
         
         self.attributes[Attributes.SOURCE_LIST] = source_list
-        _LOG.info("Initialized source list: %s", source_list)
+        _LOG.info("Initialized source list with %d items: %s", len(source_list), source_list)
         
         await self.update_attributes()
         self._initialized = True
@@ -362,23 +376,36 @@ class WiiMMediaPlayer(MediaPlayer):
                 source = params['source']
                 _LOG.info("Switching to source/function: %s", source)
                 
-                if source not in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
-                    self._metadata_clear_pending = True
-                    _LOG.info("METADATA CLEAR PENDING: Source switch to %s", source)
-                
+                # Check if it's a special device function
                 if source in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
                     await self._handle_device_function(source)
+                    return StatusCodes.OK
+                
+                # Check if it's a music service (from presets)
+                is_music_service = False
+                if self._client.presets:
+                    for preset in self._client.presets:
+                        if preset.get('source', '') == source:
+                            is_music_service = True
+                            break
+                
+                if is_music_service:
+                    # Handle as music service
+                    await self._handle_music_service_selection(source)
                 else:
+                    # Handle as physical input source
+                    self._metadata_clear_pending = True
+                    _LOG.info("METADATA CLEAR PENDING: Source switch to %s", source)
                     await self._client.send_command(f"setPlayerCmd:switchmode:{source}")
                 
-                if source not in ['display_on', 'display_off', 'toggle_display', 'reboot_device']:
-                    asyncio.create_task(self._immediate_update_after_source_change())
+                # Immediate update after any source change
+                asyncio.create_task(self._immediate_update_after_source_change())
             else:
                 _LOG.warning("Unhandled command: %s", cmd_id)
                 return StatusCodes.NOT_IMPLEMENTED
             
-            if not (cmd_id == Commands.SELECT_SOURCE and params.get('source') in 
-                   ['display_on', 'display_off', 'toggle_display', 'reboot_device']):
+            # Deferred update for most commands
+            if not (cmd_id == Commands.SELECT_SOURCE):
                 asyncio.create_task(self._deferred_update())
                 
             return StatusCodes.OK
@@ -414,6 +441,24 @@ class WiiMMediaPlayer(MediaPlayer):
                 
         except Exception as e:
             _LOG.error("Error executing device function %s: %s", function, e)
+
+    async def _handle_music_service_selection(self, service_name: str):
+        """Handle music service selection - activates first preset of that service."""
+        # Find first preset matching this service
+        for preset in self._client.presets:
+            if preset.get('source', '') == service_name:
+                preset_num = preset['number']
+                _LOG.info("Activating music service '%s' via preset #%d (%s)", 
+                         service_name, preset_num, preset.get('name', 'Unknown'))
+                
+                # Clear metadata before switching
+                self._metadata_clear_pending = True
+                
+                # Activate the preset
+                await self._client.send_command(f"MCUKeyShortClick:{preset_num}")
+                return
+        
+        _LOG.warning("No preset found for music service: %s", service_name)
 
     async def _immediate_update_after_source_change(self):
         """Immediate update after source change to clear stale metadata faster."""

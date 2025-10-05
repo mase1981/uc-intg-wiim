@@ -25,7 +25,7 @@ class WiiMClient:
         self.sources: Dict[str, str] = {}
         self.eq_presets: List[str] = []
         self.presets: List[Dict[str, Any]] = []
-        self.audio_outputs: Dict[str, str] = {}  # NEW: Store available audio outputs
+        self.audio_outputs: Dict[str, str] = {}  # Initialize as empty dict
         self._last_command_time = 0
         self._throttle_delay = 0.2
 
@@ -91,7 +91,7 @@ class WiiMClient:
                 self.presets = preset_info.get('preset_list', [])
                 _LOG.info("Discovered %d user presets", len(self.presets))
                 
-            # Discover audio outputs (NEW)
+            # Discover audio outputs
             await self._discover_audio_outputs()
         
         # Set up default input sources (these are standard across WiiM devices)
@@ -107,6 +107,7 @@ class WiiMClient:
             resp = await self.send_command("getNewAudioOutputHardwareMode")
             if not resp:
                 _LOG.warning("Could not query audio output capabilities")
+                self._set_fallback_audio_outputs()
                 return
                 
             try:
@@ -123,7 +124,7 @@ class WiiMClient:
                     '3': 'COAX'
                 }
                 
-                # Current hardware mode from your device response
+                # Current hardware mode from device response
                 current_hardware = output_info.get('hardware', '0')
                 _LOG.info("Current hardware output mode: %s (%s)", current_hardware, 
                          output_modes.get(current_hardware, 'Unknown'))
@@ -146,12 +147,10 @@ class WiiMClient:
                 
             except json.JSONDecodeError:
                 _LOG.warning("Could not parse audio output info JSON: %s", resp)
-                # Fallback to standard outputs
                 self._set_fallback_audio_outputs()
                 
         except Exception as e:
             _LOG.error("Error discovering audio outputs: %s", e)
-            # Fallback to standard outputs for most WiiM devices
             self._set_fallback_audio_outputs()
 
     def _set_fallback_audio_outputs(self):

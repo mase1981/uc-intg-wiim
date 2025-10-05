@@ -1,404 +1,424 @@
 # WiiM Integration for Unfolded Circle Remote Two/3
 
+Control your WiiM audio streaming devices (Mini, Pro, Pro Plus, Ultra, Amp) directly from your Unfolded Circle Remote 2 or Remote 3 with comprehensive media player and remote control functionality.
+
+![WiiM](https://img.shields.io/badge/WiiM-Audio%20Streaming-blue)
 [![Discord](https://badgen.net/discord/online-members/zGVYf58)](https://discord.gg/zGVYf58)
 ![GitHub Release](https://img.shields.io/github/v/release/mase1981/uc-intg-wiim)
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/mase1981/uc-intg-wiim/total)
-![License](https://img.shields.io/badge/license-MPL--2.0-blue)
+![License](https://img.shields.io/badge/license-MIT-blue)
 [![Buy Me A Coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-donate-yellow.svg)](https://buymeacoffee.com/meirmiyara)
 [![PayPal](https://img.shields.io/badge/PayPal-donate-blue.svg)](https://paypal.me/mmiyara)
 [![Github Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-30363D?&logo=GitHub-Sponsors&logoColor=EA4AAA)](https://github.com/sponsors/mase1981/button)
 
-Custom integration for controlling WiiM audio streaming devices (Mini, Pro, Pro Plus, Ultra, Amp) with your Unfolded Circle Remote Two/3.
-<p>
+## Features
 
-**NOTE:**  This integration was built and tested on WiiM Ultra, but should work for all the rest is it was build to detect and build during configuration.
+This integration provides comprehensive control of WiiM audio streaming devices with intelligent capability detection and automatic preset discovery.
 
-## 🎵 Features
+### Media Player Functionality
 
-### Media Player Control
-- **Full Playback Control**: Play, pause, stop, next, previous, seek
+- **Playback Controls**: Play, Pause, Stop, Next, Previous
 - **Volume Management**: Volume up/down, mute/unmute with real-time feedback
-- **Advanced Controls**: Repeat modes, shuffle, source switching
-- **Live Metadata**: Track title, artist, album, artwork display
-- **Progress Tracking**: Real-time position and duration updates
+- **Advanced Controls**: Repeat modes (off/one/all), Shuffle (on/off)
+- **Now Playing**: Track title, artist, album information
+- **Artwork Display**: Album art and station logos
+- **Progress Tracking**: Real-time position and duration (for non-streaming content)
+- **Source Selection**: WiFi, Bluetooth, Line-in, Optical, HDMI, Phono, USB inputs
+- **Music Services**: Spotify Connect, TIDAL Connect, Pandora, SoundCloud, and all configured services
+- **Auto-Play**: Intelligent automatic playback from music services via presets
+- **Device Functions**: Display control, device reboot
 
-### Source Management
-- **Multi-Input Support**: WiFi, Bluetooth, Line-in, Optical, HDMI, Phono, USB
-- **Service Integration**: Spotify Connect, TIDAL Connect, AirPlay, DLNA
-- **Smart Discovery**: Automatic detection of available sources per device
+### Remote Control
 
-### Remote Control Interface
-- **4-Page Layout**: Organized transport, sources, presets, and EQ controls
-- **Dynamic UI**: Pages adapt based on device capabilities
-- **Preset Support**: Up to 12 user-configured presets with service detection
-- **EQ Management**: Full equalizer control with 22+ preset options
+- **Physical Button Mapping**: Automatic mapping to Remote Two/3 buttons
+  - **Transport**: PLAY, PAUSE, NEXT, PREV buttons
+  - **Volume**: VOL+, VOL-, MUTE buttons
+  - **D-Pad**: Volume and track navigation
+  - **Color Buttons**: Quick access to top 4 music services
+  - **Power**: Stop playback (long press for device reboot)
+- **Dynamic UI Pages**: 
+  - **Main Controls**: Transport and volume controls
+  - **Music Services**: Quick access to discovered services
+  - **Presets**: One-touch access to all 12 configured presets
+  - **Audio Output**: Switch between SPDIF, AUX/Line Out, COAX outputs
+  - **Equalizer**: 22+ EQ presets with on/off control
+  - **Device Control**: Display settings and system functions
+- **Service Commands**: Dedicated commands for each music service
+- **Preset Access**: Direct preset activation (1-12)
+- **Audio Output Control**: Dynamic output switching based on device capabilities
 
-### Awesome Features
-- **Auto-Discovery**: Automatic capability detection during setup
-- **Real-time Updates**: 5-second polling with efficient state management
-- **Error Recovery**: Robust connection handling and automatic reconnection
-- **Zero Configuration**: Single IP input setup process
-<p>
+## Device Compatibility
 
-**NOTE:** For best results use a static IP
+### Supported WiiM Products
+- **WiiM Ultra**: Fully tested and verified
+- **WiiM Pro Plus**: Supported
+- **WiiM Pro**: Supported
+- **WiiM Mini**: Supported
+- **WiiM Amp**: Supported
 
-## 📋 Prerequisites
+### Network Requirements
+- **Local Network**: WiiM device on same network as Remote
+- **Static IP**: Recommended for reliability
+- **HTTPS API**: Port 443 (automatically configured)
+- **No Authentication**: Direct local control via WiiM HTTP API
 
-### Hardware Requirements
-- **WiiM Device**: Mini, Pro, Pro Plus, Ultra, or Amp (Integration was tested and built using Ultra)
-- **Remote Two/3**: Unfolded Circle Remote Two/3
-- **Network**: Both devices on same local network (Must)
-- **Firewall**: Ensure no WiiM specific ports blocked between Remote and WiiM products
+## Installation
 
-### Software Requirements (Development)
-- **Python**: 3.11 or higher
-- **Development Environment**: Visual Studio Code (recommended)
-- **Operating System**: Windows 10/11, macOS, or Linux
+### Option 1: Remote Web Interface (Recommended)
+1. Navigate to the [**Releases**](https://github.com/mase1981/uc-intg-wiim/releases) page
+2. Download the latest `uc-intg-wiim-<version>-aarch64.tar.gz` file
+3. Open your remote's web interface (`http://your-remote-ip`)
+4. Go to **Settings** → **Integrations** → **Add Integration**
+5. Click **Upload** and select the downloaded `.tar.gz` file
 
-### WiiM Device Setup
-1. Configure WiiM device using official WiiM Home app
-2. Ensure device is connected to your local network
-3. Note the device's IP address from your router or app
-4. Test device accessibility: `http://YOUR_WIIM_IP/httpapi.asp?command=getStatusEx`
+### Option 2: Docker (Advanced Users)
 
-## 🚀 Quick Start
+The integration is available as a pre-built Docker image from GitHub Container Registry:
 
-### Installation via Remote Two/3 Web Interface
+**Image**: `ghcr.io/mase1981/uc-intg-wiim:latest`
 
-1. **Access Web Configurator**
-   ```
-   http://YOUR_REMOTE_IP/configurator
-   ```
-
-2. **Install Integration**
-   - Navigate to: **Integrations** → **Available** / **Add New** → **Custom**
-   - Find: **WiiM Integration**
-   - Click: **Install**
-
-3. **Configure Device**
-   - Enter your WiiM device IP address
-   - Click: **Continue**
-   - Wait for automatic device discovery
-   - Complete setup
-   - Add the entities (Media Player / Remote)
-<p>
-
-**NOTE**: you might need to wait a few seconds for the integration to switch to "Connected"
-
-4. **Add to Activities**
-   - Go to: **Activities** → **Create New**
-   - Add discovered WiiM entities
-   - Configure remote layouts as needed
-
-## 🛠️ Development Setup
-
-### Local Development Environment
-
-```bash
-# Clone repository
-git clone https://github.com/mase1981/uc-intg-wiim.git
-cd uc-intg-wiim
-
-# Create virtual environment
-python -m venv venv
-
-# Activate environment
-# Windows:
-venv\Scripts\activate
-# macOS/Linux:
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Testing Connection
-
-```bash
-# Test WiiM device connectivity
-python -c "
-import asyncio
-from uc_intg_wiim.client import WiiMClient
-
-async def test():
-    async with WiiMClient('YOUR_WIIM_IP') as client:
-        info = await client.get_device_info()
-        print(f'Connected to: {info.get(\"DeviceName\", \"Unknown\")}')
-
-asyncio.run(test())
-"
-```
-
-### Debug with Visual Studio Code
-
-1. **Open Project**: `code .`
-2. **Configure Launch**: Use provided `.vscode/launch.json`
-3. **Start Debugging**: Press `F5`
-4. **Monitor Logs**: Check Debug Console for detailed output
-
-### Manual Execution
-
-```bash
-# Run integration directly
-python -m uc_intg_wiim.driver
-
-# With debug logging
-UC_INTEGRATION_HTTP_PORT=9090 python -m uc_intg_wiim.driver
-```
-
-## 📁 Project Structure
-
-```
-uc-intg-wiim/
-├── .github/workflows/
-│   └── build.yml              # GitHub Actions build configuration
-├── .vscode/
-│   └── launch.json            # VS Code debug configuration
-├── uc_intg_wiim/
-│   ├── __init__.py            # Package initialization
-│   ├── client.py              # WiiM HTTP API client
-│   ├── config.py              # Configuration management
-│   ├── driver.py              # Main integration driver
-│   ├── media_player.py        # Media player entity implementation
-│   ├── remote.py              # Remote control entity implementation
-│   └── setup.py               # Setup handler (optional)
-├── driver.json                # Integration metadata
-├── pyproject.toml             # Python project configuration
-├── requirements.txt           # Python dependencies
-├── README.md                  # This documentation
-└── LICENSE                    # MIT license
-```
-
-## 🔧 Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `UC_INTEGRATION_HTTP_PORT` | Integration HTTP port | `9090` |
-| `UC_INTEGRATION_INTERFACE` | Bind interface | `0.0.0.0` |
-| `UC_CONFIG_HOME` | Configuration directory | `./config` |
-| `UC_DISABLE_MDNS_PUBLISH` | Disable mDNS publishing | `false` |
-
-### Configuration File
-
-Located at: `config/config.json`
-
-```json
-{
-  "host": "192.168.1.100"
-}
-```
-
-## 🐛 Troubleshooting
-
-### Setup Issues
-
-**Problem**: Integration setup fails with connection error
-
-**Solution**:
-1. Verify WiiM device IP address
-2. Test device web interface: `http://WIIM_IP/httpapi.asp?command=getStatusEx`
-3. Ensure both devices on same network
-4. Check firewall settings
-5. Restart WiiM device if necessary
-
-**Problem**: Entities not appearing in Remote Two
-
-**Solution**:
-1. Complete setup process fully
-2. Restart integration via web configurator
-3. Check integration logs for errors
-4. Verify device discovery completed successfully
-
-### Runtime Issues
-
-**Problem**: Media player shows "Unavailable"
-
-**Solution**:
-1. Check network connectivity between devices
-2. Verify WiiM device is powered on
-3. Test API accessibility manually
-4. Check for IP address changes
-
-**Problem**: Remote commands not working
-
-**Solution**:
-1. Ensure WiiM device supports the specific command
-2. Check device capability discovery in logs
-3. Verify command syntax in remote UI
-4. Test commands via WiiM Home app
-
-**Problem**: Missing metadata or artwork
-
-**Solution**:
-1. Verify content source provides metadata
-2. Check WiiM Home app for same information
-3. Ensure stable internet connection
-4. Some sources may have limited metadata
-
-### Debug Information
-
-**Enable detailed logging**:
-```bash
-# Set logging level in driver.py
-logging.basicConfig(level=logging.DEBUG)
-```
-
-**Check integration status**:
-```bash
-# Via web configurator
-http://YOUR_REMOTE_IP/configurator → Integrations → WiiM → Status
-```
-
-**API Testing**:
-```bash
-# Test device responses
-curl "http://WIIM_IP/httpapi.asp?command=getStatusEx"
-curl "http://WIIM_IP/httpapi.asp?command=getPlayerStatus"
-curl "http://WIIM_IP/httpapi.asp?command=getMetaInfo"
-```
-
-## 🔄 Building and Deployment
-
-### GitHub Actions Build
-
-The integration includes automated building via GitHub Actions:
-
+**Docker Compose:**
 ```yaml
-# Triggered on:
-- Push to main branch
-- Pull requests
-- Manual workflow dispatch
-- Release creation
-```
-
-**Build artifacts**:
-- `uc-intg-wiim.tar.gz` - Installation package
-- `uc-intg-wiim-docker.tar.gz` - Docker image
-
-### Manual Build
-
-```bash
-# Install build dependencies
-pip install build twine
-
-# Build distribution
-python -m build
-
-# Create installation package
-tar -czf uc-intg-wiim.tar.gz \
-  driver.json \
-  uc_intg_wiim/ \
-  requirements.txt
-```
-
-### Docker Deployment
-
-```yaml
-# docker-compose.yml
 version: '3.8'
 services:
   wiim-integration:
     image: ghcr.io/mase1981/uc-intg-wiim:latest
+    container_name: uc-intg-wiim
+    restart: unless-stopped
     ports:
       - "9090:9090"
     environment:
       - UC_INTEGRATION_HTTP_PORT=9090
+      - UC_INTEGRATION_INTERFACE=0.0.0.0
       - UC_CONFIG_HOME=/config
+      - UC_DISABLE_MDNS_PUBLISH=false
     volumes:
       - ./config:/config
-    restart: unless-stopped
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - wiim-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  wiim-network:
+    driver: bridge
 ```
 
+**Docker Run:**
 ```bash
-# Deploy with Docker Compose
-docker-compose up -d
+docker run -d --name=uc-intg-wiim --network host -v </local/path>:/config --restart unless-stopped ghcr.io/mase1981/uc-intg-wiim:latest
 ```
 
-## 📚 API Reference
+## Configuration
 
-### WiiM HTTP API Endpoints
+### Step 1: Prepare Your WiiM Device
 
-| Endpoint | Purpose | Response |
-|----------|---------|----------|
-| `getStatusEx` | Device information | JSON device status |
-| `getPlayerStatus` | Playback status | JSON player state |
-| `getMetaInfo` | Track metadata | JSON metadata |
-| `getPresetInfo` | User presets | JSON preset list |
-| `EQGetList` | EQ presets | JSON equalizer options |
-| `setPlayerCmd:*` | Control commands | Status confirmation |
+1. **WiiM App Setup:**
+   - Ensure WiiM device is fully configured in WiiM Home app
+   - Connect device to your network
+   - **Important**: Configure presets for music services you want to use
+   - Note the device IP address (Settings → Device Info)
 
-### Integration API Events
+2. **Configure Music Service Presets:**
+   - Open WiiM Home app
+   - Navigate to your favorite music service (Spotify, Pandora, etc.)
+   - Find a playlist, station, or album you like
+   - **Long-press** one of the 12 preset buttons to save it
+   - Repeat for each music service you want to access
+   - At least one preset per service is required for service to appear in integration
 
-- **Entity Updates**: Real-time state synchronization
-- **Command Responses**: Immediate feedback
-- **Error Handling**: Graceful degradation
-- **Discovery Events**: Dynamic capability detection
+3. **Find Device IP:**
+   - WiiM Home app → Settings → Device → Network Info
+   - Note the IP address (e.g., `192.168.1.100`)
+   - **Recommended**: Set static IP in your router for reliability
 
-## 🤝 Contributing
+### Step 2: Setup Integration
 
-### Development Workflow
+1. After installation, go to **Settings** → **Integrations**
+2. The WiiM integration should appear in **Available Integrations**
+3. Click **"Configure"** and enter:
+   - **WiiM Device IP**: IP address of your WiiM device (e.g., `192.168.1.100`)
+4. Click **"Complete Setup"** - the integration will:
+   - Connect to the WiiM device
+   - Discover device capabilities
+   - Detect configured presets and music services
+   - Create media player and remote entities automatically
 
-1. **Fork Repository**
+### Step 3: Add to Activities
+
+1. Go to **Activities** → **Create New** or edit existing activity
+2. Add discovered WiiM entities:
+   - **Media Player**: For playback control and source selection
+   - **Remote**: For button mapping and UI pages
+3. Configure button mappings (auto-populated for physical buttons)
+4. Customize UI pages as needed
+
+## Music Services Setup
+
+### Important: Preset Requirement
+
+The WiiM HTTP API **requires presets** to access music services programmatically. Without presets, music services cannot be controlled via the integration.
+
+**Why Presets Are Required:**
+- WiiM API does not expose "list of configured services"
+- No direct "play Spotify" or "start Pandora" command exists
+- Presets are the only API-exposed method to trigger service playback
+- This is a WiiM API limitation, not an integration limitation
+
+### How to Configure Service Presets:
+
+1. **Open WiiM Home App**
+2. **For Each Service** (Spotify, Pandora, TIDAL, etc.):
+   - Navigate to the service
+   - Find any playlist, station, or album
+   - **Long-press** a preset button (1-12)
+   - Save the content as a preset
+3. **Restart Integration**
+4. **Verify**: Service now appears in source dropdown
+
+### What You Get:
+
+**After configuring presets:**
+- Music services appear in Media Player source dropdown
+- Selecting "Spotify" plays your first Spotify preset
+- Color buttons on Remote mapped to top 4 services
+- Service commands available for custom button mapping
+
+**Example Configuration:**
+- Preset 1: Spotify playlist → Service "Spotify" appears
+- Preset 2: Pandora station → Service "Pandora" appears  
+- Preset 3: Another Spotify playlist → Uses same "Spotify" service
+- Preset 4: TIDAL album → Service "TIDAL Connect" appears
+
+## Troubleshooting
+
+### Common Issues
+
+**Connection Failed:**
+- Verify WiiM device IP is correct and accessible
+- Check device is on same network as Remote
+- Ensure WiiM device is powered on
+- Test device web interface: `https://WIIM_IP/httpapi.asp?command=getStatusEx`
+- Check firewall settings between Remote and WiiM
+
+**No Music Services Appearing:**
+- **Solution**: Configure presets in WiiM Home app (see Music Services Setup above)
+- Verify presets are saved correctly in app
+- Restart integration after configuring presets
+- Check integration logs for discovered services
+
+**Metadata Not Updating:**
+- WiiM devices sometimes return placeholder values ("unknow", "un_known")
+- Integration automatically filters these placeholders
+- Radio streams may have limited metadata
+- Some services provide better metadata than others
+
+**Physical Buttons Not Auto-Mapping:**
+- Remove and re-add remote entity to activity
+- Ensure remote entity initialization completed
+- Check integration status is "Connected"
+- Verify button mappings in integration logs
+
+**Audio Output Switching Not Working:**
+- Feature availability depends on WiiM device model
+- Check device capabilities in WiiM Home app
+- Some models support SPDIF, AUX/Line Out, COAX
+- Integration automatically detects available outputs
+
+### Debug Information
+
+Enable detailed logging for troubleshooting:
+
+**Docker Environment:**
+```bash
+# Add to docker-compose.yml environment section
+- LOG_LEVEL=DEBUG
+
+# View logs
+docker logs uc-intg-wiim
+```
+
+**Integration Logs:**
+- **Remote Interface**: Settings → Integrations → WiiM → View Logs
+- **Common Errors**: Connection, discovery, preset issues
+
+**Network Verification:**
+```bash
+# Test WiiM device connectivity
+ping <device-ip>
+
+# Test WiiM API
+curl -k "https://<device-ip>/httpapi.asp?command=getStatusEx"
+
+# Test specific commands
+curl -k "https://<device-ip>/httpapi.asp?command=getPlayerStatus"
+curl -k "https://<device-ip>/httpapi.asp?command=getPresetInfo"
+```
+
+**WiiM App Verification:**
+- Verify device accessible in WiiM Home app
+- Check presets configured correctly
+- Test playback directly in app
+- Verify services are linked to your account
+
+## For Developers
+
+### Local Development
+
+1. **Clone and setup:**
    ```bash
-   gh repo fork mase1981/uc-intg-wiim
+   git clone https://github.com/mase1981/uc-intg-wiim.git
+   cd uc-intg-wiim
+   python -m venv venv
+   source venv/bin/activate  # Windows: venv\Scripts\activate
+   pip install -r requirements.txt
    ```
 
-2. **Create Feature Branch**
+2. **Configuration:**
    ```bash
-   git checkout -b feature/your-enhancement
-   ```
-
-3. **Make Changes**
-   - Follow existing code patterns
-   - Add appropriate logging
-   - Update documentation
-
-4. **Test Thoroughly**
-   ```bash
-   # Run integration locally
+   # Run integration
    python -m uc_intg_wiim.driver
    
-   # Test with actual WiiM device
-   # Verify all entity types
-   # Check error scenarios
+   # Integration runs on localhost:9090
+   # Configure via Remote interface or curl
    ```
 
-5. **Submit Pull Request**
-   - Include detailed description
-   - Reference related issues
-   - Ensure CI passes
+3. **VS Code debugging:**
+   - Open project in VS Code
+   - Use F5 to start debugging session
+   - Configure integration with your WiiM device IP
 
-### Code Standards
+### Project Structure
 
-- **Python Style**: Follow PEP 8
-- **Type Hints**: Use throughout codebase
-- **Error Handling**: Comprehensive exception management
-- **Logging**: Appropriate levels and messages
-- **Documentation**: Clear docstrings and comments
+```
+uc-intg-wiim/
+├── uc_intg_wiim/              # Main package
+│   ├── __init__.py            # Package info with auto-version
+│   ├── client.py              # WiiM HTTP API client
+│   ├── config.py              # Configuration management
+│   ├── driver.py              # Main integration driver
+│   ├── media_player.py        # Media player entity
+│   ├── remote.py              # Remote control entity
+│   └── setup.py               # Setup flow handler (optional)
+├── .github/workflows/         # GitHub Actions CI/CD
+│   └── build.yml              # Automated build pipeline
+├── docker-compose.yml         # Docker deployment
+├── Dockerfile                 # Container build (if applicable)
+├── driver.json                # Integration metadata (version source)
+├── requirements.txt           # Dependencies
+├── pyproject.toml             # Python project config (auto-version)
+└── README.md                  # This file
+```
 
-## 📄 License
+### Development Features
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+#### WiiM HTTP API Implementation
+Complete WiiM HTTP API integration:
+- **HTTPS Protocol**: SSL-based communication with certificate bypass
+- **Capability Detection**: Automatic discovery of device features
+- **Preset Discovery**: Dynamic preset and service detection
+- **Real-time Updates**: 5-second polling with efficient state management
+- **Error Recovery**: Robust connection handling and reconnection
 
-## 🆘 Support
+#### Entity Architecture
+Production-ready intelligent entities:
+- **Dynamic Creation**: Entities created based on device capabilities
+- **Button Mapping**: Automatic physical button to command mapping
+- **UI Pages**: Dynamic page generation based on discovered features
+- **Metadata Handling**: Smart filtering of WiiM placeholder values
+- **State Management**: Proper state transitions and clearing
 
-### Community Resources
+#### Audio Output Control
+Dynamic audio output management:
+- **Auto-Detection**: Discovers available output modes
+- **Fallback Support**: Standard outputs when detection fails
+- **Combo Commands**: Input + output switching for activities
+
+### Testing
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Test connection to WiiM device
+python test_connection.py <WIIM_IP>
+
+# Test API endpoints
+python test_wiim_api.py
+
+# Discover services
+python wiim_service_discovery.py <WIIM_IP>
+
+# Run integration
+python -m uc_intg_wiim.driver
+```
+
+### Testing Scripts
+
+**test_connection.py**: Verifies device connectivity and capabilities  
+**test_wiim_api.py**: Tests all API endpoints and media information  
+**wiim_service_discovery.py**: Comprehensive service and preset discovery
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes and test with WiiM device
+4. Verify all entity types (media player, remote)
+5. Test preset discovery and music services
+6. Commit changes: `git commit -m 'Add amazing feature'`
+7. Push to branch: `git push origin feature/amazing-feature`
+8. Open a Pull Request
+
+## Credits
+
+- **Developer**: Meir Miyara
+- **WiiM Protocol**: Built using WiiM HTTP API
+- **Unfolded Circle**: Remote 2/3 integration framework (ucapi)
+- **Community**: Testing and feedback from UC community
+- **Testing**: Integration built and tested on WiiM Ultra
+
+## Support & Community
 
 - **GitHub Issues**: [Report bugs and request features](https://github.com/mase1981/uc-intg-wiim/issues)
 - **UC Community Forum**: [General discussion and support](https://unfolded.community/)
-- **WiiM Support**: [Official device support](https://support.wiim.com/)
+- **Developer**: [Meir Miyara](https://www.linkedin.com/in/meirmiyara)
 
-### Professional Support
+## Known Limitations
 
-For enterprise deployments or professional integration services, contact the development team through GitHub.
+- **Music Services**: Require presets configured in WiiM Home app (WiiM API limitation)
+- **Playlists**: UCAPI does not support playlist browsing (auto-plays first song from service)
+- **Service Discovery**: Only services with configured presets are detected
+- **Metadata**: Some sources provide limited or placeholder metadata
+- **Network**: Device must be on same network as Remote
+- **Static IP**: Highly recommended for reliable connection
+
+## API Reference
+
+### WiiM HTTP API Endpoints Used
+
+- `getStatusEx` - Device information and status
+- `getPlayerStatus` - Current playback state
+- `getMetaInfo` - Track metadata
+- `getPresetInfo` - User preset configuration
+- `EQGetList` - Available equalizer presets
+- `getNewAudioOutputHardwareMode` - Audio output capabilities
+- `setPlayerCmd:*` - Playback control commands
+- `MCUKeyShortClick:{n}` - Preset activation
+- `setAudioOutputHardwareMode:{n}` - Output switching
 
 ---
 
 **Made with ❤️ for the Unfolded Circle Community**
-
-*Enjoy seamless WiiM control with your Remote Two/3!*
-<p>
 
 **Thank You**: Meir Miyara

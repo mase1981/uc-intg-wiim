@@ -28,72 +28,167 @@ api: Optional[ucapi.IntegrationAPI] = None
 config: Optional[Config] = None
 client: Optional[WiiMClient] = None
 update_task: Optional[asyncio.Task] = None
+reconnect_task: Optional[asyncio.Task] = None
 media_player_entity: Optional[WiiMMediaPlayer] = None
 remote_entity: Optional[WiiMRemote] = None
 
-async def setup_entities_from_device():
-    """Create and configure entities based on discovered device capabilities."""
+# Connection retry settings
+MAX_STARTUP_RETRIES = 15  # Try for ~60 seconds during startup
+STARTUP_RETRY_DELAY = 4   # Start with 4 second delay
+RECONNECT_CHECK_INTERVAL = 30  # Check connection every 30 seconds
+RECONNECT_RETRY_DELAY = 10     # Wait 10 seconds between reconnection attempts
+
+async def setup_entities_from_device(is_reconnection: bool = False):
+    """
+    Create and configure entities based on discovered device capabilities.
+    
+    Args:
+        is_reconnection: If True, skip entity creation (they already exist)
+    """
     global client, api, config, update_task, media_player_entity, remote_entity
     
     if not config or not config.is_configured():
         _LOG.error("Configuration not found or invalid")
         await api.set_device_state(DeviceStates.ERROR)
-        return
+        return False
 
-    _LOG.info("Connecting to WiiM device...")
+    host = config.get_host()
+    _LOG.info("Connecting to WiiM device at %s...", host)
     await api.set_device_state(DeviceStates.CONNECTING)
     
-    try:
-        host = config.get_host()
-        client = WiiMClient(host)
-        
-        if not await client.test_connection():
-            _LOG.error("Failed to connect to WiiM device at %s", host)
-            await api.set_device_state(DeviceStates.ERROR)
-            return
-
-        device_info = await client.get_device_info()
-        if not device_info:
-            _LOG.error("Failed to get device information")
-            await api.set_device_state(DeviceStates.ERROR)
-            return
+    # Retry logic with exponential backoff
+    retry_count = 0
+    retry_delay = STARTUP_RETRY_DELAY
+    max_retries = MAX_STARTUP_RETRIES if not is_reconnection else 3
+    
+    while retry_count < max_retries:
+        try:
+            # Close old client if reconnecting
+            if is_reconnection and client:
+                await client.close()
             
-        device_name = device_info.get('DeviceName', 'WiiM Device')
-        device_id = device_info.get('uuid', 'WIIM_DEVICE').replace("-", "")
-        
-        _LOG.info("Connected to WiiM device: %s (ID: %s)", device_name, device_id)
-        
-        await client.discover_capabilities()
-        
-        # Create entities with correct constructor signature
-        media_player_entity = WiiMMediaPlayer(device_id, device_name)
-        remote_entity = WiiMRemote(device_id, device_name)
-        
-        # Set client for both entities
-        media_player_entity.set_client(client)
-        remote_entity.set_client(client)
-        
-        media_player_entity._integration_api = api
-        remote_entity._integration_api = api
-        
-        api.available_entities.add(media_player_entity)
-        api.available_entities.add(remote_entity)
-        api.configured_entities.add(media_player_entity)
-        api.configured_entities.add(remote_entity)
-        
-        await remote_entity.initialize_capabilities()
-        await media_player_entity.initialize_and_set_state()
-        
-        if update_task:
-            update_task.cancel()
-        update_task = asyncio.create_task(periodic_update())
-        
-        await api.set_device_state(DeviceStates.CONNECTED)
-        _LOG.info("WiiM integration setup completed successfully")
-        
-    except Exception as e:
-        _LOG.error("Connection failed during setup: %s", e, exc_info=True)
-        await api.set_device_state(DeviceStates.ERROR)
+            client = WiiMClient(host)
+            
+            if not await client.test_connection():
+                raise ConnectionError(f"Failed to connect to WiiM device at {host}")
+
+            device_info = await client.get_device_info()
+            if not device_info:
+                raise ConnectionError("Failed to get device information")
+                
+            device_name = device_info.get('DeviceName', 'WiiM Device')
+            device_id = device_info.get('uuid', 'WIIM_DEVICE').replace("-", "")
+            
+            _LOG.info("Connected to WiiM device: %s (ID: %s)", device_name, device_id)
+            
+            await client.discover_capabilities()
+            
+            # Create entities only on first connection
+            if not is_reconnection:
+                media_player_entity = WiiMMediaPlayer(device_id, device_name)
+                remote_entity = WiiMRemote(device_id, device_name)
+                
+                media_player_entity.set_client(client)
+                remote_entity.set_client(client)
+                
+                media_player_entity._integration_api = api
+                remote_entity._integration_api = api
+                
+                api.available_entities.add(media_player_entity)
+                api.available_entities.add(remote_entity)
+                api.configured_entities.add(media_player_entity)
+                api.configured_entities.add(remote_entity)
+                
+                await remote_entity.initialize_capabilities()
+                await media_player_entity.initialize_and_set_state()
+            else:
+                # Reconnection: just update client references
+                _LOG.info("Reconnection: updating client references for existing entities")
+                if media_player_entity:
+                    media_player_entity.set_client(client)
+                    await media_player_entity.update_attributes()
+                if remote_entity:
+                    remote_entity.set_client(client)
+                    await remote_entity.update_attributes()
+            
+            # Start/restart periodic update task
+            if update_task and not update_task.done():
+                update_task.cancel()
+                try:
+                    await update_task
+                except asyncio.CancelledError:
+                    pass
+            update_task = asyncio.create_task(periodic_update())
+            
+            await api.set_device_state(DeviceStates.CONNECTED)
+            _LOG.info("WiiM integration %s completed successfully", 
+                     "reconnection" if is_reconnection else "setup")
+            return True
+            
+        except (ConnectionError, asyncio.TimeoutError, OSError) as e:
+            retry_count += 1
+            if retry_count >= max_retries:
+                _LOG.error("Connection failed after %d attempts: %s", retry_count, e)
+                await api.set_device_state(DeviceStates.ERROR)
+                return False
+            
+            _LOG.warning("Connection attempt %d/%d failed: %s. Retrying in %d seconds...", 
+                        retry_count, max_retries, e, retry_delay)
+            await asyncio.sleep(retry_delay)
+            
+            # Exponential backoff, max 30 seconds
+            retry_delay = min(retry_delay * 1.5, 30)
+            
+        except Exception as e:
+            _LOG.error("Unexpected error during %s: %s", 
+                      "reconnection" if is_reconnection else "setup", e, exc_info=True)
+            await api.set_device_state(DeviceStates.ERROR)
+            return False
+    
+    return False
+
+async def connection_monitor():
+    """
+    Background task to monitor connection health and attempt reconnection if needed.
+    Runs continuously to survive remote reboots or network issues.
+    """
+    global client, api
+    
+    _LOG.info("Connection monitor started")
+    
+    while True:
+        try:
+            await asyncio.sleep(RECONNECT_CHECK_INTERVAL)
+            
+            # Check if we're in ERROR state or client is dead
+            if api.device_state == DeviceStates.ERROR or not client:
+                _LOG.warning("Connection lost. Attempting reconnection...")
+                success = await setup_entities_from_device(is_reconnection=True)
+                
+                if not success:
+                    _LOG.error("Reconnection failed. Will retry in %d seconds", 
+                              RECONNECT_RETRY_DELAY)
+                    await asyncio.sleep(RECONNECT_RETRY_DELAY)
+                else:
+                    _LOG.info("Reconnection successful!")
+                    
+            # Verify connection is actually working
+            elif api.device_state == DeviceStates.CONNECTED:
+                try:
+                    # Quick connection test
+                    if not await client.get_player_status():
+                        _LOG.warning("Connection test failed. Marking as disconnected.")
+                        await api.set_device_state(DeviceStates.ERROR)
+                except Exception as e:
+                    _LOG.warning("Connection test failed: %s. Marking as disconnected.", e)
+                    await api.set_device_state(DeviceStates.ERROR)
+                    
+        except asyncio.CancelledError:
+            _LOG.info("Connection monitor task cancelled")
+            break
+        except Exception as e:
+            _LOG.error("Error in connection monitor: %s", e, exc_info=True)
+            await asyncio.sleep(RECONNECT_RETRY_DELAY)
 
 async def setup_handler(msg: ucapi.SetupDriver) -> ucapi.SetupAction:
     """Handle driver setup requests."""
@@ -119,7 +214,7 @@ async def setup_handler(msg: ucapi.SetupDriver) -> ucapi.SetupAction:
             config.set("host", host)
             config.save()
             
-            asyncio.create_task(setup_entities_from_device())
+            asyncio.create_task(setup_entities_from_device(is_reconnection=False))
             return SetupComplete()
             
         except Exception as e:
@@ -130,10 +225,11 @@ async def setup_handler(msg: ucapi.SetupDriver) -> ucapi.SetupAction:
 
 async def periodic_update():
     """Periodically update entity states."""
-    global media_player_entity, remote_entity
+    global media_player_entity, remote_entity, client
     
     _LOG.info("Starting periodic update task")
     
+    # Initial update
     if media_player_entity:
         await media_player_entity.update_attributes()
     if remote_entity:
@@ -143,11 +239,17 @@ async def periodic_update():
         try:
             await asyncio.sleep(5.0)
             
+            # Only update if we're connected and have a client
             if (api.device_state == DeviceStates.CONNECTED and 
                 media_player_entity and remote_entity and client):
                 
-                await media_player_entity.update_attributes()
-                await remote_entity.update_attributes()
+                try:
+                    await media_player_entity.update_attributes()
+                    await remote_entity.update_attributes()
+                except Exception as e:
+                    _LOG.error("Error updating entity attributes: %s", e)
+                    # Mark connection as failed so monitor can reconnect
+                    await api.set_device_state(DeviceStates.ERROR)
                 
         except asyncio.CancelledError:
             _LOG.info("Periodic update task cancelled")
@@ -183,7 +285,7 @@ async def on_disconnect():
 
 async def main():
     """Main driver entry point."""
-    global api, config
+    global api, config, reconnect_task
     
     _LOG.info("Starting WiiM Integration Driver")
     
@@ -201,9 +303,12 @@ async def main():
         api.add_listener(Events.CONNECT, on_connect)
         api.add_listener(Events.DISCONNECT, on_disconnect)
         
+        # Start connection monitor task
+        reconnect_task = asyncio.create_task(connection_monitor())
+        
         if config.is_configured():
-            _LOG.info("Device already configured, starting connection...")
-            asyncio.create_task(setup_entities_from_device())
+            _LOG.info("Device already configured, starting connection with retry logic...")
+            asyncio.create_task(setup_entities_from_device(is_reconnection=False))
         else:
             _LOG.info("Device not configured, waiting for setup...")
             await api.set_device_state(DeviceStates.DISCONNECTED)
@@ -213,6 +318,12 @@ async def main():
     except Exception as e:
         _LOG.error("Fatal error in main: %s", e, exc_info=True)
         raise
+    finally:
+        # Cleanup tasks
+        if reconnect_task and not reconnect_task.done():
+            reconnect_task.cancel()
+        if update_task and not update_task.done():
+            update_task.cancel()
 
 if __name__ == "__main__":
     try:

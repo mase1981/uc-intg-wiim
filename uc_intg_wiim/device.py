@@ -94,7 +94,10 @@ class WiiMDevice(PollingDevice):
 
         await self._discover_capabilities()
         await self._fetch_device_info()
-        await self._update_player_state()
+        try:
+            await self._update_player_state()
+        except ConnectionError:
+            _LOG.warning("[%s] Initial player state query failed, continuing with defaults", self.log_id)
 
         self._state = "ON"
         _LOG.info("[%s] Connected successfully", self.log_id)

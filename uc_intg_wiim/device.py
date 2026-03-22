@@ -411,7 +411,7 @@ class WiiMDevice(PollingDevice):
             return
         status = await self._client.get_player_status()
         if not status:
-            return
+            raise ConnectionError("Failed to get player status")
 
         self._volume = int(status.get("vol", self._volume))
         self._muted = status.get("mute") == "1"

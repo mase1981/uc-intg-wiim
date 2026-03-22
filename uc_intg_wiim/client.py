@@ -54,7 +54,7 @@ class WiiMClient:
             await asyncio.sleep(WIIM_THROTTLE_DELAY - elapsed)
         self._last_command_time = time.time()
 
-        url = f"https://{self._host}/httpapi.asp?command={command}"
+        url = f"http://{self._host}/httpapi.asp?command={command}"
         try:
             async with self._session.get(
                 url, timeout=aiohttp.ClientTimeout(total=WIIM_API_TIMEOUT)

@@ -120,6 +120,7 @@ class WiiMDevice(PollingDevice):
             await self._client.close()
             self._client = None
         self._state = "UNAVAILABLE"
+        await super().disconnect()
 
     # ── State Properties ─────────────────────────────────────────────
 

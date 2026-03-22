@@ -17,4 +17,4 @@ ENV UC_INTEGRATION_HTTP_PORT="9090"
 ENV UC_CONFIG_HOME="/config"
 LABEL org.opencontainers.image.source https://github.com/mase1981/uc-intg-wiim
 
-CMD ["python3", "-u", "uc_intg_wiim/driver.py"]
+CMD ["python3", "-u", "-m", "uc_intg_wiim"]

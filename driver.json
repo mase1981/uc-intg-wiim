@@ -1,27 +1,30 @@
 {
   "driver_id": "uc-intg-wiim",
+  "version": "2.0.0",
+  "min_core_api": "0.22.0",
   "name": { "en": "WiiM Integration" },
   "icon": "uc:speaker",
   "description": {
     "en": "Integration for WiiM audio streaming devices including Ultra, Pro, Mini, and Amp models."
   },
-  "version": "1.1.1",
-  "developer": { 
+  "developer": {
     "name": "Meir Miyara",
     "email": "meir.miyara@gmail.com"
   },
-  "min_core_api": "0.3.1",
+  "home_page": "https://github.com/mase1981/uc-intg-wiim",
+  "release_date": "2026-03-22",
   "setup_data_schema": {
-    "title": { "en": "WiiM Device Setup" },
+    "title": { "en": "WiiM Integration Setup" },
     "settings": [
       {
-        "id": "host",
-        "label": { "en": "WiiM Device IP Address" },
-        "field": { 
-          "text": { 
-            "value": "",
-            "placeholder": "Enter your WiiM device IP address (e.g., 192.168.1.100)"
-          } 
+        "id": "info",
+        "label": { "en": "Setup information" },
+        "field": {
+          "label": {
+            "value": {
+              "en": "Enter your WiiM device IP address on the next screen."
+            }
+          }
         }
       }
     ]

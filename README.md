@@ -1,10 +1,10 @@
 # WiiM Integration for Unfolded Circle Remote 2/3
 
-Control your WiiM audio streaming devices (Mini, Pro, Pro Plus, Ultra, Amp) directly from your Unfolded Circle Remote 2 or Remote 3 with **comprehensive media player control**, **automatic service discovery**, and **intelligent preset management**.
+Control your WiiM audio streaming devices (Mini, Pro, Pro Plus, Ultra, Amp) directly from your Unfolded Circle Remote 2 or Remote 3 with **comprehensive media player control**, **media browser**, and **intelligent preset management**.
 
 ![WiiM](https://img.shields.io/badge/WiiM-Audio%20Streaming-blue)
 [![GitHub Release](https://img.shields.io/github/v/release/mase1981/uc-intg-wiim?style=flat-square)](https://github.com/mase1981/uc-intg-wiim/releases)
-![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
+![License](https://img.shields.io/badge/license-MPL--2.0-blue?style=flat-square)
 [![GitHub issues](https://img.shields.io/github/issues/mase1981/uc-intg-wiim?style=flat-square)](https://github.com/mase1981/uc-intg-wiim/issues)
 [![Community Forum](https://img.shields.io/badge/community-forum-blue?style=flat-square)](https://unfolded.community/)
 [![Discord](https://badgen.net/discord/online-members/zGVYf58)](https://discord.gg/zGVYf58)
@@ -12,11 +12,6 @@ Control your WiiM audio streaming devices (Mini, Pro, Pro Plus, Ultra, Amp) dire
 [![Buy Me A Coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-donate-yellow.svg?style=flat-square)](https://buymeacoffee.com/meirmiyara)
 [![PayPal](https://img.shields.io/badge/PayPal-donate-blue.svg?style=flat-square)](https://paypal.me/mmiyara)
 [![Github Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-30363D?&logo=GitHub-Sponsors&logoColor=EA4AAA&style=flat-square)](https://github.com/sponsors/mase1981)
-
-
-## Features
-
-This integration provides comprehensive control of WiiM audio streaming devices through the WiiM HTTP API, delivering seamless integration with your Unfolded Circle Remote for complete music control with intelligent capability detection and automatic preset discovery.
 
 ---
 ## ❤️ Support Development ❤️
@@ -30,76 +25,59 @@ If you find this integration useful, consider supporting development:
 Your support helps maintain this integration. Thank you! ❤️
 ---
 
-### 🎵 **Media Player Functionality**
+## Features
 
-#### **Playback Controls**
-- **Play/Pause/Stop** - Full playback control
-- **Next/Previous** - Track navigation
-- **Repeat Modes** - Off/One/All
-- **Shuffle** - On/Off control
-- **Real-time Updates** - 5-second polling
+### 🎵 Media Player
 
-#### **Volume Management**
-- **Volume Up/Down** - Precise volume control
-- **Set Volume** - Direct volume control (0-100)
-- **Volume Slider** - Visual volume control
-- **Mute/Unmute** - Quick mute toggle
-- **Real-time Feedback** - Instant volume updates
+- **Playback Controls** — Play/Pause, Stop, Next, Previous, Repeat, Shuffle
+- **Volume Management** — Volume slider, Up/Down, Mute toggle
+- **Media Information** — Now Playing with title, artist, album, artwork, progress tracking
+- **Source Selection** — Physical inputs (WiFi, Bluetooth, Line In, Optical, HDMI, Phono, USB) and music services (Spotify Connect, TIDAL Connect, and more)
+- **Real-time Updates** — 5-second polling with instant state feedback
 
-#### **Media Information**
-- **Now Playing** - Track title, artist, album
-- **Artwork Display** - Album art and station logos
-- **Progress Tracking** - Real-time position and duration
-- **Source Display** - Current input/service
+### 📂 Media Browser
 
-#### **Source Selection**
-- **Physical Inputs** - WiFi, Bluetooth, Line-in, Optical, HDMI, Phono, USB
-- **Music Services** - Spotify Connect, TIDAL Connect, Pandora, SoundCloud
-- **Auto-Play** - Intelligent automatic playback via presets
-- **Service Discovery** - Automatic detection from configured presets
+Browse and play your WiiM content directly from the Remote's media browser interface:
 
-### 🎮 **Remote Control Features**
+- **Presets** — Browse all configured presets with names, sources, and thumbnails. Tap to play instantly.
+- **Sources** — Browse and switch between all available physical inputs and discovered music services.
+- **Search** — Search across presets and sources by name.
 
-#### **Physical Button Mapping**
-Automatic mapping to Remote 2/3 buttons:
-- **Transport**: PLAY, PAUSE, NEXT, PREV
-- **Volume**: VOL+, VOL-, MUTE
-- **D-Pad**: Volume and track navigation
-- **Color Buttons**: Quick access to top 4 music services
-- **Power**: Stop playback (long press for reboot)
+### 🎮 Remote Control
 
-#### **Dynamic UI Pages**
-- **Main Controls**: Transport and volume
-- **Music Services**: Quick access to discovered services
-- **Presets**: One-touch access to all 12 configured presets
-- **Audio Output**: Switch between SPDIF, AUX/Line Out, COAX
-- **Equalizer**: 22+ EQ presets with on/off control
-- **Device Control**: Display settings and system functions
+- **Physical Button Mapping** — Transport (Play, Pause, Next, Prev), Volume (Up, Down, Mute), D-Pad navigation, Power (Stop / long-press Reboot)
+- **Dynamic UI Pages** — Main Controls, Sources, Presets, Audio Output, Equalizer, Device Control
+- **22+ EQ Presets** — Full equalizer control with on/off toggle
 
-### **Device Compatibility**
+### 📊 Sensors
 
-#### **Supported WiiM Products**
-- **WiiM Ultra** - Fully tested and verified
-- **WiiM Pro Plus** - Supported
-- **WiiM Pro** - Supported
-- **WiiM Mini** - Supported
-- **WiiM Amp** - Supported
+- **Firmware Version** — Current device firmware
+- **Device Model** — Hardware model identification
+- **WiFi Network** — Connected SSID
+- **IP Address** — Device network address
+- **Current Source** — Active input/playback mode
 
-### **Protocol Requirements**
+### 🎛️ Select Entities
 
-- **Protocol**: WiiM HTTP API
-- **HTTPS Port**: 443 (automatically configured)
-- **Authentication**: None (direct local control)
-- **Network Access**: Device must be on same local network
-- **Capability Detection**: Automatic discovery
+- **Equalizer** — Browse and select EQ presets
+- **Audio Output** — Switch between SPDIF, AUX/Line Out, COAX, BT Source, Audio Cast
 
-### **Network Requirements**
+### Device Compatibility
 
-- **Local Network Access** - Integration requires same network as WiiM device
-- **HTTPS Protocol** - WiiM HTTP API (port 443)
-- **Static IP Recommended** - Device should have static IP or DHCP reservation
-- **Firewall** - Must allow HTTPS traffic
-- **No Authentication** - Direct local control
+| Device | Status |
+|---|---|
+| WiiM Ultra | Fully tested and verified |
+| WiiM Pro Plus | Supported |
+| WiiM Pro | Supported |
+| WiiM Mini | Supported |
+| WiiM Amp | Supported |
+
+### Network Requirements
+
+- Local network access (same network as WiiM device)
+- HTTPS protocol (port 443, automatically configured)
+- No authentication required (direct local control)
+- Static IP or DHCP reservation recommended
 
 ## Installation
 
@@ -111,8 +89,6 @@ Automatic mapping to Remote 2/3 buttons:
 5. Click **Upload** and select the downloaded `.tar.gz` file
 
 ### Option 2: Docker (Advanced Users)
-
-The integration is available as a pre-built Docker image from GitHub Container Registry:
 
 **Image**: `ghcr.io/mase1981/uc-intg-wiim:latest`
 
@@ -133,125 +109,66 @@ services:
     restart: unless-stopped
 ```
 
-**Docker Run:**
-```bash
-docker run -d --name uc-intg-wiim --restart unless-stopped --network host -v wiim-config:/config -e UC_CONFIG_HOME=/config -e UC_INTEGRATION_INTERFACE=0.0.0.0 -e UC_INTEGRATION_HTTP_PORT=9090 -e PYTHONPATH=/app ghcr.io/mase1981/uc-intg-wiim:latest
-```
-
 ## Configuration
 
 ### Step 1: Prepare Your WiiM Device
 
-**IMPORTANT**: WiiM device must be powered on and connected to your network before adding the integration.
-
-#### WiiM App Setup:
 1. Ensure WiiM device is fully configured in WiiM Home app
 2. Connect device to your network
-3. **Important**: Configure presets for music services you want to use
+3. Configure presets for music services you want to use (required for service discovery)
 4. Note the device IP address (Settings → Device Info)
 
-#### Configure Music Service Presets:
+### Step 2: Configure Music Service Presets
+
+The WiiM HTTP API requires presets to access music services programmatically:
+
 1. Open WiiM Home app
 2. Navigate to your favorite music service (Spotify, Pandora, etc.)
-3. Find a playlist, station, or album you like
+3. Find a playlist, station, or album
 4. **Long-press** one of the 12 preset buttons to save it
 5. Repeat for each music service you want to access
-6. At least one preset per service is required for service to appear in integration
+6. At least one preset per service is required for the service to appear in the integration
 
-#### Find Device IP:
-- WiiM Home app → Settings → Device → Network Info
-- Note the IP address (e.g., `192.168.1.100`)
-- **Recommended**: Set static IP in your router for reliability
-
-### Step 2: Setup Integration
+### Step 3: Setup Integration
 
 1. After installation, go to **Settings** → **Integrations**
 2. The WiiM integration should appear in **Available Integrations**
-3. Click **"Configure"** to begin setup:
+3. Click **Configure** and enter your WiiM device IP address
+4. Integration will connect, discover capabilities, detect presets and services
 
-#### **Configuration:**
-- **WiiM Device IP**: IP address of your WiiM device (e.g., `192.168.1.100`)
-- Click **Complete Setup**
-
-#### **Connection Test:**
-- Integration will connect to the WiiM device
-- Discover device capabilities
-- Detect configured presets and music services
-- Setup fails if device unreachable
-
-4. Integration will create entities:
-   - **Media Player**: Playback control and source selection
-   - **Remote**: Button mapping and UI pages
+Created entities:
+- **Media Player** — Playback control, source selection, media browser
+- **Remote** — Button mapping and UI pages
+- **Sensors** — Firmware, model, WiFi, IP, current source
+- **Selects** — Equalizer and audio output (if device supports them)
 
 ## Using the Integration
 
-### Music Services Setup
+### Media Browser
 
-**Important: Preset Requirement**
+Access the media browser from the media player entity on your Remote:
 
-The WiiM HTTP API **requires presets** to access music services programmatically. Without presets, music services cannot be controlled via the integration.
+1. Open the WiiM media player entity
+2. Tap the **Browse** button
+3. Navigate through **Presets** or **Sources**
+4. Tap any item to play it instantly
+5. Use **Search** to find presets or sources by name
 
-**Why Presets Are Required:**
-- WiiM API does not expose "list of configured services"
-- No direct "play Spotify" or "start Pandora" command exists
-- Presets are the only API-exposed method to trigger service playback
-- This is a WiiM API limitation, not an integration limitation
+### Music Services
 
-**How to Configure Service Presets:**
-1. Open WiiM Home App
-2. For Each Service (Spotify, Pandora, TIDAL, etc.):
-   - Navigate to the service
-   - Find any playlist, station, or album
-   - **Long-press** a preset button (1-12)
-   - Save the content as a preset
-3. Restart Integration
-4. Verify: Service now appears in source dropdown
-
-**What You Get:**
-- Music services appear in Media Player source dropdown
-- Selecting "Spotify" plays your first Spotify preset
-- Color buttons on Remote mapped to top 4 services
-- Service commands available for custom button mapping
-
-**Example Configuration:**
-- Preset 1: Spotify playlist → Service "Spotify" appears
-- Preset 2: Pandora station → Service "Pandora" appears
-- Preset 3: Another Spotify playlist → Uses same "Spotify" service
-- Preset 4: TIDAL album → Service "TIDAL Connect" appears
-
-### Media Player Entity
-
-The media player entity provides comprehensive control:
-
-- **Playback Control**: Play, Pause, Stop, Next, Previous
-- **Volume Control**: Volume slider, Up/Down, Mute toggle
-- **Source Selection**: Physical inputs and music services
-- **Media Information**: Title, Artist, Album, Artwork
-- **Advanced Features**: Repeat, Shuffle, Seek
-
-### Remote Entity
-
-The remote entity provides UI pages and button mapping:
-
-- **Main Controls**: Transport and volume controls
-- **Music Services**: Quick access to discovered services
-- **Presets**: One-touch access to all 12 presets
-- **Audio Output**: Dynamic output switching
-- **Equalizer**: EQ presets with on/off control
-- **Device Control**: Display and system functions
+Music services appear in the source dropdown when at least one preset is configured per service. Selecting a service plays its first configured preset.
 
 ## Credits
 
 - **Developer**: Meir Miyara
-- **WiiM Protocol**: Built using WiiM HTTP API
-- **Unfolded Circle**: Remote 2/3 integration framework (ucapi)
 - **Protocol**: WiiM HTTP API
+- **Framework**: Unfolded Circle ucapi-framework
 - **Community**: Testing and feedback from UC community
-- **Testing**: Integration built and tested on WiiM Ultra
+- **Testing**: Built and tested on WiiM Ultra
 
 ## License
 
-This project is licensed under the MIT License - see LICENSE file for details.
+This project is licensed under the MPL-2.0 License - see LICENSE file for details.
 
 ## Support & Community
 
@@ -262,6 +179,4 @@ This project is licensed under the MIT License - see LICENSE file for details.
 
 ---
 
-**Made with ❤️ for the Unfolded Circle and WiiM Communities**
-
-**Thank You**: Meir Miyara
+**Made with ❤️ for the Unfolded Circle and WiiM Communities — Thank You: Meir Miyara**

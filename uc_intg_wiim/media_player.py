@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 from ucapi import media_player, StatusCodes
-from ucapi.api_definitions import (
+from ucapi.media_player import (
     BrowseOptions,
     BrowseResults,
     SearchOptions,

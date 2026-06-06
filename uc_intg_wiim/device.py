@@ -19,6 +19,7 @@ from uc_intg_wiim.const import (
     PHYSICAL_SOURCES,
     PLAYBACK_MODE_MAP,
     VOLUME_STEP,
+    WIIM_MAX_POLL_ERRORS,
     WIIM_POLL_INTERVAL,
 )
 
@@ -47,7 +48,7 @@ class WiiMDevice(PollingDevice):
         self._media_image_url: str | None = None
         self._media_duration: int = 0
         self._media_position: int = 0
-        self._media_type: str = "MUSIC"
+        self._media_type: str = "music"
 
         self._device_name: str = device_config.name
         self._firmware: str | None = None
@@ -55,6 +56,8 @@ class WiiMDevice(PollingDevice):
         self._wifi_ssid: str | None = None
         self._ip_address: str | None = None
         self._current_mode: str = "0"
+
+        self._consecutive_poll_errors: int = 0
 
         self._eq_presets: list[str] = list(device_config.eq_presets)
         self._current_eq: str | None = None
@@ -99,6 +102,7 @@ class WiiMDevice(PollingDevice):
         except ConnectionError:
             _LOG.warning("[%s] Initial player state query failed, continuing with defaults", self.log_id)
 
+        self._consecutive_poll_errors = 0
         self._state = "ON"
         _LOG.info("[%s] Connected successfully", self.log_id)
         return self._client
@@ -108,12 +112,29 @@ class WiiMDevice(PollingDevice):
             return
         try:
             await self._update_player_state()
+            if self._consecutive_poll_errors > 0:
+                _LOG.info("[%s] Poll recovered after %d error(s)", self.log_id, self._consecutive_poll_errors)
+            self._consecutive_poll_errors = 0
+            if self._state == "UNAVAILABLE":
+                self._state = "ON"
+                self.events.emit(DeviceEvents.CONNECTED, self.identifier)
             self.push_update()
         except Exception as err:
-            _LOG.debug("[%s] Poll error: %s", self.log_id, err)
-            if self._state != "UNAVAILABLE":
-                self._state = "UNAVAILABLE"
-                self.events.emit(DeviceEvents.DISCONNECTED, self.identifier)
+            self._consecutive_poll_errors += 1
+            _LOG.debug("[%s] Poll error (%d/%d): %s", self.log_id, self._consecutive_poll_errors, WIIM_MAX_POLL_ERRORS, err)
+
+            if self._consecutive_poll_errors >= WIIM_MAX_POLL_ERRORS:
+                _LOG.warning("[%s] %d consecutive poll errors, resetting HTTP session", self.log_id, self._consecutive_poll_errors)
+                await self._reset_client()
+
+                if await self._client.test_connection():
+                    self._consecutive_poll_errors = 0
+                    _LOG.info("[%s] Session reset successful, connection restored", self.log_id)
+                    return
+
+                if self._state != "UNAVAILABLE":
+                    self._state = "UNAVAILABLE"
+                    self.events.emit(DeviceEvents.DISCONNECTED, self.identifier)
 
     async def disconnect(self) -> None:
         if self._client:
@@ -121,6 +142,12 @@ class WiiMDevice(PollingDevice):
             self._client = None
         self._state = "UNAVAILABLE"
         await super().disconnect()
+
+    async def _reset_client(self) -> None:
+        if self._client:
+            await self._client.close()
+        self._client = WiiMClient(self._device_config.host)
+        await self._client.connect()
 
     # ── State Properties ─────────────────────────────────────────────
 
@@ -460,11 +487,11 @@ class WiiMDevice(PollingDevice):
         self._media_image_url = WiiMClient.clean_metadata_value(meta.get("albumArtURI"))
 
         if self._media_artist or self._media_album:
-            self._media_type = "MUSIC"
+            self._media_type = "music"
         elif self._media_title and self._media_image_url:
-            self._media_type = "RADIO"
+            self._media_type = "radio"
         else:
-            self._media_type = "MUSIC"
+            self._media_type = "music"
 
     def _clear_media(self) -> None:
         self._media_title = None

@@ -5,7 +5,9 @@ WiiM device implementation using PollingDevice.
 :license: MPL-2.0, see LICENSE for more details.
 """
 
+import asyncio
 import logging
+import time
 from typing import Any
 from urllib.parse import unquote
 
@@ -19,8 +21,11 @@ from uc_intg_wiim.const import (
     PHYSICAL_SOURCES,
     PLAYBACK_MODE_MAP,
     VOLUME_STEP,
+    WIIM_CONNECT_RETRIES,
+    WIIM_CONNECT_RETRY_DELAY,
     WIIM_MAX_POLL_ERRORS,
     WIIM_POLL_INTERVAL,
+    WIIM_POSITION_RESYNC_INTERVAL,
 )
 
 _LOG = logging.getLogger(__name__)
@@ -58,6 +63,8 @@ class WiiMDevice(PollingDevice):
         self._current_mode: str = "0"
 
         self._consecutive_poll_errors: int = 0
+        self._last_snapshot: tuple | None = None
+        self._last_push_time: float = 0.0
 
         self._eq_presets: list[str] = list(device_config.eq_presets)
         self._current_eq: str | None = None
@@ -90,7 +97,7 @@ class WiiMDevice(PollingDevice):
         self._client = WiiMClient(self._device_config.host)
         await self._client.connect()
 
-        if not await self._client.test_connection():
+        if not await self._test_connection_with_retry():
             await self._client.close()
             self._client = None
             raise ConnectionError(f"Cannot reach WiiM device at {self._device_config.host}")
@@ -118,7 +125,7 @@ class WiiMDevice(PollingDevice):
             if self._state == "UNAVAILABLE":
                 self._state = "ON"
                 self.events.emit(DeviceEvents.CONNECTED, self.identifier)
-            self.push_update()
+            self._push_if_changed()
         except Exception as err:
             self._consecutive_poll_errors += 1
             _LOG.debug("[%s] Poll error (%d/%d): %s", self.log_id, self._consecutive_poll_errors, WIIM_MAX_POLL_ERRORS, err)
@@ -148,6 +155,45 @@ class WiiMDevice(PollingDevice):
             await self._client.close()
         self._client = WiiMClient(self._device_config.host)
         await self._client.connect()
+
+    async def _test_connection_with_retry(self) -> bool:
+        for attempt in range(1, WIIM_CONNECT_RETRIES + 1):
+            if await self._client.test_connection():
+                return True
+            if attempt < WIIM_CONNECT_RETRIES:
+                _LOG.debug(
+                    "[%s] Connection attempt %d/%d failed, retrying in %.0fs",
+                    self.log_id, attempt, WIIM_CONNECT_RETRIES, WIIM_CONNECT_RETRY_DELAY,
+                )
+                await asyncio.sleep(WIIM_CONNECT_RETRY_DELAY)
+        return False
+
+    def _significant_snapshot(self) -> tuple:
+        return (
+            self._state,
+            self._volume,
+            self._muted,
+            self._repeat,
+            self._shuffle,
+            self._source,
+            self._media_title,
+            self._media_artist,
+            self._media_album,
+            self._media_image_url,
+            self._media_duration,
+            self._media_type,
+        )
+
+    def _push_if_changed(self) -> None:
+        snapshot = self._significant_snapshot()
+        now = time.monotonic()
+        if snapshot != self._last_snapshot:
+            self._last_snapshot = snapshot
+            self._last_push_time = now
+            self.push_update()
+        elif now - self._last_push_time >= WIIM_POSITION_RESYNC_INTERVAL:
+            self._last_push_time = now
+            self.push_update()
 
     # ── State Properties ─────────────────────────────────────────────
 

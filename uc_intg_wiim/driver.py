@@ -43,5 +43,5 @@ class WiiMDriver(BaseIntegrationDriver[WiiMDevice, WiiMDeviceConfig]):
                 lambda cfg, dev: WiiMAudioOutputSelect(cfg, dev) if dev.audio_outputs else None,
             ],
             driver_id="uc-intg-wiim",
-            require_connection_before_registry=True,
+            require_connection_before_registry=False,
         )
